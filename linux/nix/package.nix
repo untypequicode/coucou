@@ -4,6 +4,7 @@
 {
   lib,
   stdenv,
+  fetchurl,
   rustPlatform,
   fetchNpmDeps,
   npmHooks,
@@ -13,6 +14,7 @@
   wrapGAppsHook3,
   openssl,
   dbus,
+  alsa-lib, # Flow dictation and the Notetaker record through cpal
   glib-networking,
   webkitgtk_4_1,
   gtk3,
@@ -27,6 +29,22 @@ let
   root = ../..;
   triple = stdenv.hostPlatform.rust.rustcTargetSpec;
   cargoToml = lib.importTOML (root + "/windows/Cargo.toml");
+
+  # sherpa-onnx-sys (speech recognition for Flow and the Notetaker) downloads its
+  # static libraries while it builds, which the sandbox forbids: they are fetched
+  # here and handed over through SHERPA_ONNX_LIB_DIR. Keep the version equal to
+  # the sherpa-onnx-sys one in windows/Cargo.lock, and update both hashes with it.
+  sherpaVersion = "1.13.8";
+  sherpaArch = if stdenv.hostPlatform.isAarch64 then "aarch64" else "x64";
+  sherpaStem = "sherpa-onnx-v${sherpaVersion}-linux-${sherpaArch}-static-lib";
+  sherpaArchive = fetchurl {
+    url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVersion}/${sherpaStem}.tar.bz2";
+    hash =
+      if stdenv.hostPlatform.isAarch64 then
+        "sha256-d5g+PPKapg8uUx0knb0B0VWWUwVQyNsungL8amVdprs="
+      else
+        "sha256-4f3FtnUw4VdB74l/pf//KXBW878MbYKaJ6+SJaTEtaY=";
+  };
 in
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "coucou";
@@ -54,7 +72,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   npmDeps = fetchNpmDeps {
     name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
     src = "${finalAttrs.src}/windows";
-    hash = "sha256-V1XF0g+jjNWX/iqkCSaieVHDk5jcntIut0jqBBRWMDk=";
+    hash = "sha256-7EXrOl/R7WjSbDcLmpbngjSr4ojM4LmtkmPrwyFG+Rc=";
   };
 
   nativeBuildInputs = [
@@ -68,6 +86,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   buildInputs = [
     openssl
     dbus
+    alsa-lib # Flow dictation and the Notetaker record through cpal
     glib-networking # TLS for WebKit
     webkitgtk_4_1
     gtk3
@@ -86,6 +105,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # npm's prebuild script builds coucou-hook for the target triple, but
   # tauri.conf.json looks for it in windows/target/release.
   postPatch = ''
+    mkdir -p "$TMPDIR/sherpa"
+    tar -xjf ${sherpaArchive} -C "$TMPDIR/sherpa"
+    export SHERPA_ONNX_LIB_DIR="$TMPDIR/sherpa/${sherpaStem}/lib"
     mkdir -p target/${triple}/release windows/target
     ln -s "$PWD/target/${triple}/release" windows/target/release
   '';
