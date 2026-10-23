@@ -689,7 +689,7 @@ copy the hash Nix prints into `linux/nix/package.nix`.
 What changes on Linux:
 
 - **The island** is a gtk-layer-shell overlay anchored to the top edge, over any
-  top panel, on compositors that support it: COSMIC, KDE Plasma, Hyprland, Sway
+  top panel, on compositors that support it: COSMIC, KDE Plasma, Hyprland, niri, Sway
   and other wlroots compositors. GNOME has no layer-shell and ignores where a
   Wayland window asks to go, so there Coucou runs through XWayland as a dock
   window: top centre, on every workspace, still there after Super+D.
@@ -703,7 +703,7 @@ What changes on Linux:
   they follow it only while it is over him, and "the cursor is far away" (so
   he may fall asleep) means it hasn't been over him for a few seconds.
 - **Mochi on the desktop** is a layer-shell surface on the island's display
-  (KDE Plasma, COSMIC, Hyprland, Sway…), placed with margins and dragged within
+  (KDE Plasma, COSMIC, Hyprland, niri, Sway…), placed with margins and dragged within
   that display; on X11 it is an ordinary always-on-top window that goes
   anywhere. **GNOME on Wayland** has no layer-shell and lets no app place its
   own window, so there Mochi can't leave the island: dragging him does nothing,
@@ -739,6 +739,13 @@ What changes on Linux:
   Coucou that is already open. The ids are `toggleIsland`, `openChat`,
   `goToAlert`, `jumpToTerminal`, `nextPill`, `prevPill`, `muteToggle`,
   `desktopToggle` and `wardrobeToggle`.
+  **niri** has no GlobalShortcuts portal, so its keys go in `~/.config/niri/config.kdl`:
+  ```kdl
+  binds {
+      Mod+Space { spawn "coucou" "--shortcut" "openChat"; }
+      Mod+Shift+Space { spawn "coucou" "--shortcut" "toggleIsland"; }
+  }
+  ```
 - **Keys** live in the Secret Service (GNOME Keyring, KWallet).
 - **Spotify** (Settings → Integrations) is read over MPRIS, Spotify's D-Bus
   interface on the session bus: the pill shows the track and plays, pauses
@@ -791,6 +798,11 @@ What changes on Linux:
     native Wayland ones included (Zed, kitty, Alacritty, foot…); the nearest
     ancestor's window gets a `hyprctl dispatch focuswindow`, which switches to
     its workspace. `hyprctl` must be on the `PATH` of Coucou's session.
+  - **niri**: `niri msg --json windows` lists every window with its process ID,
+    native Wayland ones included (Zed, kitty, Alacritty, foot…); the nearest
+    ancestor's window gets a `niri msg action focus-window`, which scrolls to it
+    and switches to its workspace. `niri` must be on the `PATH` of Coucou's
+    session.
   - **kitty**, anywhere: its tab is selected too when remote control listens on
     a socket (`allow_remote_control` and `listen_on` in kitty.conf).
   - **GNOME on Wayland** and other Wayland compositors without one of these let no app bring another

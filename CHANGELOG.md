@@ -4,6 +4,7 @@
 
 - **NixOS and Nix** *(Linux)* — a `flake.nix` at the root builds and runs Coucou: `nix run github:Louis-CFM/coucou`, with a `nix develop` shell for `npm run tauri dev`. Checked on Hyprland: the island is a layer-shell overlay and the shortcuts are registered through the portal
 - **Zed on Hyprland** *(Linux)* — "Open terminal" now brings the session's window forward on Hyprland, native Wayland windows such as Zed's included (it used to reach only X11 and KDE windows). Without `code`, "Open terminal" and the diff card's ↗ open the folder or file in Zed (`zeditor`, or `zed` installed in your home folder)
+- **niri** *(Linux)* — "Open terminal" now brings the session's window forward on niri, native Wayland windows such as Zed's included (it used to reach only X11 and KDE windows). The README lists niri among the layer-shell compositors and shows the `binds` to put in `config.kdl` for the shortcuts, since niri has no GlobalShortcuts portal
 
 ## Windows and Linux 0.5.3 — October 22, 2026
 
