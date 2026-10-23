@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **niri** *(Linux)* — "Open terminal" now brings the session's window forward on niri, native Wayland windows such as Zed's included (it used to reach only X11 and KDE windows). The README lists niri among the layer-shell compositors and shows the `binds` to put in `config.kdl` for the shortcuts, since niri has no GlobalShortcuts portal
+
 ## Windows and Linux 0.5.3 — October 22, 2026
 
 WhatsApp comes to Windows and Linux, as on the Mac.
