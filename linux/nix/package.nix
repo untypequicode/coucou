@@ -72,7 +72,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   npmDeps = fetchNpmDeps {
     name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
     src = "${finalAttrs.src}/windows";
-    hash = "sha256-QBSOJ+cMiWJH0W88j2QfvVyOR516Q5IIlwgVG9JDORA=";
+    hash = "sha256-iJ8hACfIJNHjRIeeoKXkcHUi0nEUuhmBxwr+u215ljw=";
   };
 
   nativeBuildInputs = [
