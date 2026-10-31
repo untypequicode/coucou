@@ -24,7 +24,7 @@ const SOURCE = resolve(here, "../../NotchBuddy/Resources/Localizable.xcstrings")
 const OUTPUT = resolve(here, "../src/i18n/strings.json");
 
 /** The languages Coucou ships, in the Mac's picker order. English is the source. */
-export const LANGUAGES = ["en", "zh-Hans", "hi", "es", "ar", "fr", "bn", "pt-BR", "ru", "id"];
+export const LANGUAGES = ["en", "zh-Hans", "hi", "es", "ar", "fr", "bn", "pt-BR", "ru", "id", "de", "tr", "ko", "ja"];
 
 /**
  * Names for the placeholders of the Mac strings the Windows code uses, by Mac
@@ -33,6 +33,9 @@ export const LANGUAGES = ["en", "zh-Hans", "hi", "es", "ar", "fr", "bn", "pt-BR"
 const RENAMES = {
   "Auto-close · %llds": ["seconds"],
   "Chat with %@": ["name"],
+  "chat.subscriptions.default-model": ["tool"],
+  "chat.subscriptions.found": ["tool"],
+  "chat.subscriptions.missing": ["tool"],
   "Claude is reading %@…": ["name"],
   "Connected · %@": ["detail"],
   "Key configured · %@": ["model"],
@@ -95,6 +98,10 @@ export function generate(catalog) {
       const value = readLocalization(locs[lang], names);
       if (value !== undefined) out[lang] = value;
     }
+    // Only a string translated in every language comes across. Xcode keeps every literal it finds in the catalog,
+    // brand names and placeholders like " +%@" too, with no translation; and a string still being translated on
+    // the Mac shows in English there. Either way Windows has nothing to add, and the tests below would flag it.
+    if (LANGUAGES.some((lang) => lang !== "en" && out[lang] === undefined)) continue;
     // The English plural forms are needed to pick "one" in English too.
     if (typeof en !== "string") out.en = en;
     strings[key] = out;

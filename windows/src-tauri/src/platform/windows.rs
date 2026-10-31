@@ -8,26 +8,36 @@ use std::process::Command;
 
 use tauri::{AppHandle, Manager, WebviewWindow};
 
-use ::windows::core::{BOOL, PWSTR};
-use ::windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, HWND, LPARAM, LocalFree, POINT};
+use ::windows::core::{w, BOOL, PWSTR};
+use ::windows::Win32::Foundation::{
+    CloseHandle, HANDLE, HLOCAL, HWND, LPARAM, LocalFree, POINT, RPC_E_CHANGED_MODE,
+};
 use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+use ::windows::Win32::System::Com::{
+    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+};
 use ::windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
-use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use ::windows::Win32::System::Threading::{
+    AttachThreadInput, GetCurrentProcess, GetCurrentThreadId, OpenProcessToken,
+};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, HKL, MAPVK_VK_TO_VSC,
     VK_CONTROL, VK_LBUTTON, VK_MENU, VK_SHIFT,
 };
+use ::windows::Win32::UI::Shell::{
+    ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC,
+};
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos, GetWindow, GetWindowLongPtrW,
-    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
-    SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW,
+    BringWindowToTop, EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos,
+    GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId,
+    IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, SetWindowLongPtrW, ShowWindow,
+    GWL_EXSTYLE, GW_OWNER, SW_RESTORE, SW_SHOW, SW_SHOWNORMAL, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 use super::LocalTime;
@@ -133,22 +143,23 @@ pub fn find_on_path(stem: &str) -> Option<PathBuf> {
     None
 }
 
-/// Where the Codex CLI may be, best first: %PATH% (codex.exe or npm's
-/// codex.cmd), then npm's global folder and the Volta / Bun / pnpm ones.
-/// Rust quotes the one fixed argument safely for a `.cmd` (see find_on_path).
-pub fn codex_candidates() -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = find_on_path("codex").into_iter().collect();
+/// Where a CLI such as `codex` or `claude` may be, best first: %PATH% (the
+/// .exe or npm's .cmd), then npm's global folder, the Volta / Bun / pnpm ones
+/// and the native installers' %USERPROFILE%\.local\bin. Rust quotes arguments
+/// safely for a `.cmd` (see find_on_path).
+pub fn cli_candidates(name: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = find_on_path(name).into_iter().collect();
     let var = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|p| p.is_absolute());
     if let Some(appdata) = var("APPDATA") {
-        out.push(appdata.join("npm").join("codex.cmd"));
+        out.push(appdata.join("npm").join(format!("{name}.cmd")));
     }
     if let Some(local) = var("LOCALAPPDATA") {
-        out.push(local.join("Volta").join("bin").join("codex.exe"));
-        out.push(local.join("pnpm").join("codex.cmd"));
+        out.push(local.join("Volta").join("bin").join(format!("{name}.exe")));
+        out.push(local.join("pnpm").join(format!("{name}.cmd")));
     }
     if let Some(home) = var("USERPROFILE") {
-        out.push(home.join(".bun").join("bin").join("codex.exe"));
-        out.push(home.join(".local").join("bin").join("codex.exe"));
+        out.push(home.join(".bun").join("bin").join(format!("{name}.exe")));
+        out.push(home.join(".local").join("bin").join(format!("{name}.exe")));
     }
     out.retain(|p| p.is_file());
     out
@@ -362,6 +373,12 @@ pub fn pipe_client_pid(handle: RawHandle) -> Option<u32> {
     (pid != 0).then_some(pid)
 }
 
+/// Whether a program runs (by its executable's name, any case): the Mail pill asks for
+/// OUTLOOK.EXE before it starts PowerShell, so a closed Outlook costs nothing.
+pub fn process_running(exe: &str) -> bool {
+    process_table().values().any(|p| p.exe.eq_ignore_ascii_case(exe))
+}
+
 /// Every process, by ID: its parent and its executable's name.
 fn process_table() -> HashMap<u32, Proc> {
     let mut out = HashMap::new();
@@ -433,11 +450,54 @@ pub fn window_owners(ancestors: &[u32]) -> Vec<u32> {
 fn bring_forward(raw: isize) -> bool {
     let hwnd = HWND(raw as *mut _);
     unsafe {
+        if !IsWindow(Some(hwnd)).as_bool() {
+            return false;
+        }
         if IsIconic(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_RESTORE);
+        } else {
+            let _ = ShowWindow(hwnd, SW_SHOW);
         }
-        // Allowed: the click on the island that asked for this was the last input.
-        SetForegroundWindow(hwnd).as_bool()
+
+        // The island window has WS_EX_NOACTIVATE, so clicks on it do not make Coucou
+        // the active foreground window. Windows blocks SetForegroundWindow unless the
+        // calling thread is attached to the foreground thread or owns foreground rights.
+        let fg_hwnd = GetForegroundWindow();
+        if fg_hwnd == hwnd {
+            return true;
+        }
+
+        let cur_thread = GetCurrentThreadId();
+        let fg_thread = if fg_hwnd.0.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(fg_hwnd, None)
+        };
+        let target_thread = GetWindowThreadProcessId(hwnd, None);
+
+        let attached_fg = if fg_thread != 0 && fg_thread != cur_thread {
+            AttachThreadInput(cur_thread, fg_thread, true).as_bool()
+        } else {
+            false
+        };
+
+        let attached_target = if target_thread != 0 && target_thread != cur_thread && target_thread != fg_thread {
+            AttachThreadInput(cur_thread, target_thread, true).as_bool()
+        } else {
+            false
+        };
+
+        let _ = BringWindowToTop(hwnd);
+        let ok = SetForegroundWindow(hwnd).as_bool();
+
+        if attached_target {
+            let _ = AttachThreadInput(cur_thread, target_thread, false);
+        }
+        if attached_fg {
+            let _ = AttachThreadInput(cur_thread, fg_thread, false);
+        }
+
+        ok || GetForegroundWindow() == hwnd
     }
 }
 
@@ -471,14 +531,85 @@ fn focus_app(exe: &str) -> bool {
 
 /// The Claude desktop app: brought forward when it runs (Claude Code's own
 /// `claude.exe` has no window of its own, so it is never the one picked),
-/// started from where its installer puts it otherwise.
+/// started from the Squirrel path or its registered MSIX protocol otherwise.
 pub fn open_claude_desktop() -> bool {
-    if focus_app("claude.exe") {
-        return true;
+    open_claude_with(
+        || focus_app("claude.exe"),
+        || {
+            std::env::var_os("LOCALAPPDATA").is_some_and(|base| {
+                let exe = PathBuf::from(base).join("AnthropicClaude").join("claude.exe");
+                exe.is_file() && Command::new(exe).spawn().is_ok()
+            })
+        },
+        activate_claude_protocol,
+    )
+}
+
+fn open_claude_with(
+    focus: impl FnOnce() -> bool,
+    squirrel: impl FnOnce() -> bool,
+    protocol: impl FnOnce() -> bool,
+) -> bool {
+    focus() || squirrel() || protocol()
+}
+
+/// The MSIX manifest registers `claude`; let Windows resolve its current install.
+fn activate_claude_protocol() -> bool {
+    unsafe {
+        let initialized = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        // A Tauri thread may already use MTA. Keep that apartment: the Shell can
+        // delegate activation, and we must not uninitialize someone else's COM.
+        if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
+            return false;
+        }
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC,
+            lpVerb: w!("open"),
+            lpFile: w!("claude://"),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        let opened = ShellExecuteExW(&mut info).is_ok();
+        if initialized.is_ok() {
+            CoUninitialize();
+        }
+        opened
     }
-    let Some(base) = std::env::var_os("LOCALAPPDATA") else { return false };
-    let exe = PathBuf::from(base).join("AnthropicClaude").join("claude.exe");
-    exe.is_file() && Command::new(exe).spawn().is_ok()
+}
+
+#[cfg(test)]
+mod claude_launch_tests {
+    use super::open_claude_with;
+    use std::cell::RefCell;
+
+    #[test]
+    fn tries_launchers_in_order_and_stops_after_success() {
+        for (focus, squirrel, protocol, expected, calls) in [
+            (true, true, true, true, vec!["focus"]),
+            (false, true, true, true, vec!["focus", "squirrel"]),
+            (false, false, true, true, vec!["focus", "squirrel", "protocol"]),
+            (false, false, false, false, vec!["focus", "squirrel", "protocol"]),
+        ] {
+            let seen = RefCell::new(Vec::new());
+            let result = open_claude_with(
+                || {
+                    seen.borrow_mut().push("focus");
+                    focus
+                },
+                || {
+                    seen.borrow_mut().push("squirrel");
+                    squirrel
+                },
+                || {
+                    seen.borrow_mut().push("protocol");
+                    protocol
+                },
+            );
+            assert_eq!(result, expected);
+            assert_eq!(seen.into_inner(), calls);
+        }
+    }
 }
 
 // ── Global shortcuts ──────────────────────────────────────────────────────────
@@ -549,3 +680,17 @@ pub fn set_layer_overlay(_win: &WebviewWindow, _on: bool) {}
 pub fn layer_display(_island: &WebviewWindow, _mochi: &WebviewWindow) -> Option<(f64, f64)> {
     None
 }
+
+// ── Flow dictation's pill ─────────────────────────────────────────────────────
+// On Windows the pill is placed with set_position and a cursor poll decides
+// click-through (flow/pill.rs), like the island.
+
+pub fn prepare_pill_window(win: &WebviewWindow, _mode: super::DesktopMode) -> bool {
+    make_non_activating(win);
+    let _ = win.set_ignore_cursor_events(true);
+    true
+}
+
+pub fn set_pill_edge(_win: &WebviewWindow, _edge: &str) {}
+
+pub fn set_pill_input(_win: &WebviewWindow, _rects: Vec<(f64, f64, f64, f64)>) {}

@@ -2,7 +2,210 @@
 
 ## Unreleased
 
-- **Coucou for Android**, by @Rhytam23 — your agents, Allow and Deny with your fingerprint or screen lock (even on a locked phone), answers to Claude's questions, chat through the computer's own keys, plan usage and services, an optional island over other apps, a widget, a quick-settings tile and an ongoing notification. It pairs with Coucou 0.4.0 or later on Windows or Linux. Android 11 or later, English only; the first signed APK is on its way. Build it today from [`android/`](android/README.md) (#501 by @Rhytam23)
+- **NixOS and Nix** *(Linux)* — a `flake.nix` at the root builds and runs Coucou: `nix run github:Louis-CFM/coucou`, with a `nix develop` shell for `npm run tauri dev`. Checked on Hyprland: the island is a layer-shell overlay and the shortcuts are registered through the portal
+- **Zed on Hyprland** *(Linux)* — "Open terminal" now brings the session's window forward on Hyprland, native Wayland windows such as Zed's included (it used to reach only X11 and KDE windows). Without `code`, "Open terminal" and the diff card's ↗ open the folder or file in Zed (`zeditor`, or `zed` installed in your home folder)
+- **niri** *(Linux)* — "Open terminal" now brings the session's window forward on niri, native Wayland windows such as Zed's included (it used to reach only X11 and KDE windows). The README lists niri among the layer-shell compositors and shows the `binds` to put in `config.kdl` for the shortcuts, since niri has no GlobalShortcuts portal
+
+## 0.5.8 — October 31, 2026
+
+Fixes by @Ohualtex.
+
+- **Approval comes back after a question** — answering a question now brings back the approval that was waiting behind it (#993 by @Ohualtex, #851)
+- **Questions stay put** — a new permission request or switching pills no longer sends a waiting question back to the terminal; opening the island shows it again (#994 by @Ohualtex, #852)
+- **Desktop Mochi stays visible** — Mochi no longer disappears from the desktop when you switch apps (#992 by @Ohualtex, #921)
+- **Dropped files no longer overwrite each other** — a second file with the same name is kept beside the first, and the copies Coucou keeps are cleaned up after 7 days (#986 by @Ohualtex, #856)
+- **No misplaced Writing Tools button** — the island's text fields no longer show the macOS Writing Tools button near the notch (#997 by @Ohualtex, #936)
+
+## Windows and Linux 0.5.8 — October 31, 2026
+
+Fourteen fixes and features by @Ohualtex.
+
+- **Permission requests wait their turn** — up to 5 requests now queue in the island instead of the second one going back to the terminal (#984 by @Ohualtex, #870)
+- **Claude Desktop cards** *(Windows)* — permission requests and questions from Claude Desktop sessions are answered from the island (#441 by @Ohualtex, #328); **Claude Desktop pill on Linux**: Anthropic's Linux app gets its pill, and ↗ opens it (#975 by @Ohualtex, #941)
+- **Plan usage in the compact island** — a new option shows your Claude plan percentage next to the agent dots; click it for the details (#979 by @Ohualtex, #889)
+- **Alerts from every pill** — a new option: when another pill finishes or hits an error, the island shows it for a moment, then your pill comes back (#976 by @Ohualtex, #942)
+- **Flow pill in a corner** — bottom-left and bottom-right join bottom, left and right in Flow settings, out of the way of a centred dock (#980 by @Ohualtex, #958)
+- **"Open terminal" brings the window forward** *(Windows)* — Coucou raises the session's terminal or editor instead of falling back to VS Code (#704 by @Ohualtex, #604)
+- **The dictation pill stays out of sight when dictation is off** *(Windows)* — it is parked off-screen at launch and draws nothing while hidden (#699 by @Ohualtex, #698, #711); the idle Flow pill lets clicks through until the pointer is on it (#981 by @Ohualtex, #929)
+- **The island sits under a taskbar at the top** *(Windows)* — it starts below a top taskbar, on every display, instead of covering it (#989 by @Ohualtex, #956)
+- **Uninstalling keeps your status line** *(Windows)* — the status line Coucou stands in for is saved outside the folder the uninstaller removes, and an existing copy is moved there at launch (#995 by @Ohualtex, #855)
+- **Apps opened from Coucou keep your own display settings** *(Linux)* — browsers, editors and apps no longer inherit Coucou's GDK and GStreamer overrides (#977 by @Ohualtex, #859)
+- **Gitea and Forgejo Actions CI** — the default branch's CI shows the latest Actions run when the instance reports no commit statuses (#988 by @Ohualtex, #891)
+- **The sidebar follows the language** — changing the language now relabels the Coucou window's sidebar and the dictation status too (#705 by @Ohualtex)
+
+## 0.5.7 — October 31, 2026
+
+GitHub build: the App Store build is unchanged.
+
+- **Mail in the notch** — the Mail pill searches every Apple Mail inbox from its magnifier: free words, `from:anne`, `subject:"May quote"`, and quick filters (All, Unread, Important, Today). Click a message to read it in the notch, which grows under the Mail card; Open, Reply (Mail's own window: nothing leaves from Coucou), Mark as read, Important, Junk, and in ⋯ Always important (VIP) or Always ignore this sender. The unread badge is just the number. Coucou no longer slows Mail down: it reads messages in small batches, never with whole-mailbox searches, and waits for Mail to settle after it opens
+- **Mail sorted for you** — a Mail section in the Coucou window: Overview, Rules, Banned words, VIP. **Sort new messages automatically** (off by default) looks only at what arrives after you turn it on, each message once: VIPs are flagged, banned words (whole words) send to Junk, then the first rule that matches marks as important or read, sends to Junk or moves to a folder. A journal lists every action with its reason and **Undo**. Coucou never deletes a message
+- **Your mail in the chat** — turn on **Mail** next to the model and the chat's AI sees your 40 newest messages and can answer with a plan: sort, reply drafts, sends, or a mail merge that gives each recipient their page of a PDF. The plan shows as a card; nothing happens before **Send me a test** or **Run**, which waits 5 seconds (Cancel). Works with every chat provider, key or subscription
+- **Search the settings** — a field at the top of the Coucou window's sidebar finds any setting as you type, whatever the accents; a click opens the page, scrolls to the box and makes it glow. Enter opens the first result
+- **Coucou in a corner of the screen** — Settings → General → Display → Position, or drag Mochi to a corner and let go: a magnet shows where he'll land. At rest, a small rounded tile with Mochi alone; hover it and the other pills come out one after the other. Open, Mochi sits in the corner with the other pills' Mochis on a quarter circle around him; click one and they swap places. Drop him at the top centre to bring him back to the notch
+
+## Windows and Linux 0.5.7 — October 31, 2026
+
+- **Mail with classic Outlook** *(Windows)* — the Mail pill reads the classic Outlook already open on your PC through its own COM objects: no sign-in, no app to register at Microsoft, no admin consent, and Coucou never starts Outlook. Search and filters, reading and actions, the Mail section with automatic sorting, rules, banned words, VIPs and a journal with Undo, and the chat's Mail switch with plans that run only after Run, as on the Mac. Outlook's scripts use unique temporary files that are always removed, and a script that hangs is stopped and reaped (#1004 by @Ohualtex). The new Outlook for Windows has no COM objects and Linux has no Outlook, so the pill is for classic Outlook only
+- **Search the settings** — a field under the brand in the Coucou window's sidebar finds any setting as you type; Enter opens the first result, Esc clears it, and the box found glows (#1002 by @Ohualtex)
+
+## 0.5.6 — October 30, 2026
+
+- **Chat on your own AI subscription** — Settings → Chat → Your AI subscriptions: one switch per provider. On, the chat goes through the provider's official terminal tool, signed in with your own account: Claude Code (Claude plan), Antigravity CLI or Gemini CLI (Google AI plan), Codex CLI (ChatGPT plan), and two new choices in the chat, Cursor CLI and GitHub Copilot CLI. Off, the API key as before. Replaces 0.5.5's hidden rule (empty the key and Claude Code answers): each row says whether the tool is installed, how to install it and how to sign in, and the chat's model chip names the tool that answers. Every run is read-only (plan or ask modes, no shell, no edits), loads none of your hooks, MCP servers or extensions where the tool lets Coucou turn them off, saves no session, and searches the web for the chat only; a dropped file is read with no web. Coucou reads no credential. GitHub build: the App Store build is sandboxed and still needs a key
+- **The tools are found where you installed them** — nvm, fnm, Volta, Bun, pnpm, Homebrew or the tools' own installers, and else through your login shell (a Claude Code installed with npm under nvm was not found before)
+- **Korean** (#880 by @lovyestar) **and Japanese**: 16 languages
+
+## Windows and Linux 0.5.6 — October 30, 2026
+
+- **Chat on your own AI subscription** — the same switches as on the Mac in Settings → Chat (Claude Code, Antigravity CLI or Gemini CLI, Codex CLI, Cursor CLI, Copilot CLI), read-only runs, and the phone's chat takes the same path. Through npm's `.cmd` shims on Windows the prompt goes in on stdin. Without a key and with Claude's switch off, the chat asks for a key instead of answering through Claude Code anyway; Flow's clean-up and the notes of a call still use Claude Code when no key is saved
+- **Korean** (#880 by @lovyestar) **and Japanese**: 14 languages
+
+## 0.5.5 — October 29, 2026
+
+- **Chat on your Claude plan, no API key** — with no Anthropic key saved, the chat is answered by your own Claude Code (`claude -p`), signed in with your account. Each run loads none of your settings or hooks, no MCP server, saves no session, and may only search the web or, with no web at all, read the file you dropped (copied alone into a folder of its own). GitHub build: the App Store build is sandboxed and still needs a key. Saving a key switches back to the API
+- **Each session apart behind its pill** — two terminals or two VS Code windows stay one pill, but each session keeps its own name, steps and finish; a session waiting for you takes a place in the grid beside the pill, and the open card lists the sessions (#878 by @NikitaBulichev, #429)
+- **Questions from several sessions wait side by side** instead of sending each other back to the terminal, and every waiting question reaches the iPhone (#877, #874 by @NikitaBulichev)
+- **Sessions named after their title** — Claude Code's own title when you never used /rename, so two sessions in one repository no longer both read its folder (#876 by @NikitaBulichev)
+- **Claude Code on a remote machine** — the relay runs on a Linux server reached over SSH, follows `COUCOU_SOCKET`, and counts VS Code Remote sessions as VS Code; setup in [docs/REMOTE.md](docs/REMOTE.md) (#875 by @NikitaBulichev)
+
+## Windows and Linux 0.5.5 — October 29, 2026
+
+- **Chat on your Claude plan, no API key** — with no Anthropic key saved, the chat, Flow's clean-up and the notes of a call run through your own Claude Code (`claude -p`), signed in with your account. Each run loads none of your settings or hooks, no MCP server, saves no session, and may only search the web or, with no web at all, read the file you dropped. « OK Coucou » still needs the key. Saving a key switches everything back to the API (#903 by @RomainBrocheton)
+
+## 0.5.4 — October 29, 2026
+
+Reliability: bugs reported by @romainb82 and others, fixed by the community.
+
+- **The hook server never gives up** — one failed connection no longer stops Coucou from hearing Claude Code until the next launch (#872 by @seongj-un, #853)
+- **Your own hooks are safe** — installing or removing Coucou's hooks only touches Coucou's own entries, never a hook of yours whose path mentions "coucou" (#944 by @rahul05ranjan, #854)
+- **No crash without a microphone** (#950 by @gabbe-swe, #949)
+- **"Hide after" is used** — the delay set in Settings now hides the compact island (#780 by @Ohualtex, #675)
+- **Nothing drawn over the real notch while hidden** (#789 by @orrrrli); a third-party agent's finished card no longer says "Claude Code finished" (#865 by @Ohualtex, #593)
+- **Service pills tell the truth** — n8n no longer replays an old run as new at launch, and keeps each run's real time (#948, #861); Stripe no longer adds different currencies together (#938, #860); GitHub counts the stars of all your repositories, past the first 100 (#939, #862); Kraken keeps tickers such as XTZ and ZRX whole (#926, #863). All by @Ohualtex
+- **WhatsApp statuses aren't chats** — a contact's WhatsApp Status and channel posts no longer show up as a conversation in the WhatsApp pill (#901, same fix as #910)
+
+## Windows and Linux 0.5.4 — October 29, 2026
+
+Reliability: 25 community fixes, shared with the Mac where they apply.
+
+- **The hook relay never gives up** — a failed pipe connection no longer stops Coucou from hearing Claude Code (#872 by @seongj-un, #853); the pipe no longer crashes under many connections (mio 1.2.4, #911 by @afpruivo)
+- **Windows: an approval card goes once the terminal has taken over** (#890 by @afpruivo, #857); the hooks go where `CLAUDE_CONFIG_DIR` points (#810 by @afpruivo)
+- **Settings saved at the same moment no longer collide** (#888 by @Ohualtex, #858)
+- **The Flow pill's buttons take clicks** and the pill keeps its edge (#760 by @arnavaggarwal-dev, #759); on Linux its toolbar folds even when the leave event is lost (#946 by @dougkusanagi, #584)
+- **Windows: the Settings window opens even when creating it at startup failed** (#807 by @afpruivo, #775); the last edit stays on the ticker after Claude Code finishes (#846 by @afpruivo, #840); the chat field keeps the focus after an answer (#931 by @ce017); no coloured bar under Mochi at 150 % scale (#867 by @PythonTilk)
+- **WhatsApp groups show their names** instead of "Group <id>" (#907 by @arnavaggarwal-dev)
+- **OpenCode 2 sessions finish properly in the island** (#808 by @afpruivo, #717)
+- **Service pills tell the truth** — n8n, Stripe and GitHub, as on the Mac (#948, #938, #939 by @Ohualtex)
+- **Linux: 24-bit microphones work for Flow and notes** (#785 by @eduardo-qts); on Arch, the desktop entry uses the portal's app id (#947 by @rahul05ranjan, #804); the build has no warnings left (#893 by @ZouaouiB)
+
+## Windows and Linux 0.5.3 — October 22, 2026
+
+WhatsApp comes to Windows and Linux, as on the Mac.
+
+- **WhatsApp in the island** *(experimental)* — your incoming WhatsApp messages in a green pill, one row per conversation with initials, name, the last message and the unread count; photos, voice messages and documents show as a label. Click a conversation to read its last ten messages and reply: Enter sends, Shift+Enter starts a new line, Esc goes back. Mochi smiles at a new message. Groups stay quiet unless you're mentioned, chats you ignore never show, and read receipts go only when you open a conversation or reply. Off by default: Settings → Integrations → WhatsApp
+- **Install WhatsApp in one click** — Coucou downloads GOWA, the open-source gateway, from its GitHub page, checks it against the SHA-256 GOWA publishes, starts it on this computer only and shows the QR code to scan; **Update** fetches GOWA's latest version, and your own GOWA or OpenWA goes under **Advanced**. Messages stay in memory, are never logged or saved, and are forgotten when Coucou quits. Use it on your own account only: WhatsApp may restrict accounts that abuse it
+- **Statuses aren't chats** — a contact's WhatsApp Status and channel posts no longer show up as a conversation in the pill (#910 by @afpruivo, reported by @orphic07 in #901)
+- **Mochi stays whole on another monitor** — moving the island or Mochi on the desktop to a screen with another scale no longer cuts him off or blurs him; the mini Mochis and the wardrobe follow too (#892 by @ZouaouiB, tested on two monitors by @afpruivo; fixes #344)
+
+## Android 0.3.0 — October 22, 2026
+
+- **Coucou for Android 0.3.0**, by @Rhytam23 — a bigger release (versionCode 3). It works with Coucou 0.5.0 or later on Windows and Linux; the weekly recap needs Coucou 0.5.2 on Windows or Linux.
+  - **Clearer link** — Home names the likely cause when the computer is out of reach (computer closed, other network, phone link off); predictive back; the ongoing notification is updated only when its text changes.
+  - **Permission requests** — choose the vibration (default, short, off) and whether a request wakes the screen (off by default). Allow still needs your fingerprint or screen lock, and approvals are never muted or hidden.
+  - **Look** — a light theme (System, Light, Dark) and the phone's own colours on Android 12 and later; Reduce motion, TalkBack in words, large text and 48 dp touch targets.
+  - **Nine more languages** — French, Spanish, Brazilian Portuguese, Simplified Chinese, Hindi, Bengali, Russian, Indonesian and Arabic (right to left), with a language picker.
+  - **Quick actions** — launcher shortcuts (Chat, Recent decisions, Pair again), a Team widget, and Share to Coucou (the text lands in the chat box and is never sent).
+  - **Weekly recap and history** — last week's counts on Home (optional, off by default, behind its own switch on the computer), search and export of recent decisions as text, and a per-agent mute for finished, failed and limit notices (requests and questions are never muted).
+  - Fixes #629: the *Away from home Wi-Fi* section only shows when the pairing carries a relay (#682 by @Rhytam23)
+
+## 0.5.3 — October 22, 2026
+
+Mochi tells you a new version waits, and after the update he shows you what it brings.
+
+- **Mochi turns blue when a new version waits** *(macOS, GitHub build)* — once you agreed to look for updates, a newer Coucou turns Mochi blue with a little up arrow whenever he has nothing else to tell you, in the notch and in the menu bar, and opening the notch shows **Update now** first (it is also the first line of the menu). Later hides it for a day. Approvals and questions always come first
+- **What's new, after the update** — once Coucou updated itself, the notch shows what the new version brings (with an icon each, in your language), then *Your Coucou so far*: agent sessions, time with your agents, lines written, approvals from the notch, words dictated and time saved with Flow, calls transcribed. All of it is counted on your Mac and never leaves it
+- **Buy Mochi a coffee** — Coucou stays free and open source; if it saves you time, the last step of What's new has a coffee for Mochi (Stripe, the same page as Coucou's website)
+
+## Windows and Linux 0.5.2 — October 22, 2026
+
+- **Mochi turns blue when a new version waits** — once you agreed to look for updates, a newer version turns Mochi blue with a little up arrow, in the island and in the tray, and opening the island shows **Update now** first. Later hides it for a day. Approvals and questions always come first
+- **What's new, after the update** — the island shows once what the new version brings, then *Your Coucou so far* (counted on your computer, never sent) and **Buy Mochi a coffee**
+- **GitLab and Gitea** — two new pills like GitHub's: open merge and pull requests, reviews asked of you, the default branch's CI and your activity, for gitlab.com or your own instance; tokens stay in the system's credential store (#831 by @Andrey89711, from #591 and #585)
+- **Weekly recap on Coucou for Android** — Settings → Android phone → *Show my weekly recap on the phone*: last week's counts only, off by default (#682 by @Rhytam23)
+
+## 0.5.2 — October 20, 2026
+
+New versions now come to you: Mochi says it in the notch and one click installs it. Plus four new languages and a round of community work.
+
+- **New version in the notch** *(macOS, GitHub build)* — Coucou asks once whether it may look at its releases on GitHub; then, a few times a day, Mochi tells you when a new Coucou is out: **Update now**, What's new, Later. The click downloads it from GitHub, checks it is Coucou at the announced version, signed with its developer's Developer ID and notarized by Apple, swaps the app and restarts. Also in the menu bar and in Settings → General → Updates (Check now). Nothing is checked before you say yes, and nothing about you is sent
+- **Four new languages** — German and Turkish (by @Ohualtex), Thai (by @XBalanceZ) and Traditional Chinese (by @shawn-t516): 14 languages in Settings → General → Language
+- **Homebrew** — `brew tap louis-cfm/coucou https://github.com/Louis-CFM/coucou`, then `brew install --cask coucou` (#340 by @espensgr)
+- **Plan approval from the notch** — when Claude Code has a plan ready, the card offers the terminal's own choices: Auto mode, Manual, or Change plan, which brings the terminal forward to type the change (#703 by @orrrrli)
+- **The pill's name** — a Claude Code session's pill is named after its `/rename` title, else the folder it started in (no longer the subfolder it moved into), and with several sessions it follows the one that is working (#761 by @orrrrli)
+- **Quiet when you're watching** — a turn that ends while its terminal is in front only takes a badge: no sound, no reveal (#719 by @orrrrli)
+- **Alerts from every pill** — Settings → General → Behavior → *Open for every pill's alerts*: another pill that finishes or fails opens the notch for a moment, then the pill you had comes back (#683, asked by @Arochell). Off by default
+- **Claude Desktop chats** *(GitHub build, experimental)* — Mochi jumps when a regular chat reply is ready in the Claude app, while you're elsewhere (#686, idea by @GreGCerisier). Settings → Agents → Claude Desktop chats, off by default; it uses Accessibility and reads nothing of the chat
+- **Antigravity questions** — when Antigravity asks you something, its pill says so with a sound (#709 by @Ohualtex, #690)
+- **Conductor** — Claude Code sessions run from Conductor land on the Claude Code pill, and Open terminal brings Conductor forward (#793, asked by @victorlohezic)
+- DeepSeek, Qwen and Moonshot chats work again: streaming sent the wrong key (#803 and #730 by @itgoodojo, fix from #667 by @pedrozampiroli)
+
+## Windows and Linux 0.5.1 — October 20, 2026
+
+- **New version in the island** — Coucou asks once whether it may look at its releases on GitHub, then tells you when a new one is out. On Windows, **Update now** downloads the installer that matches how you installed Coucou (setup.exe or MSI), checks its SHA-256 against the one GitHub publishes, installs it and comes back by itself; the portable exe and Linux get the release page. Settings → General → Updates and the tray menu too (#812, plan by @afpruivo)
+- **German and Turkish** (by @Ohualtex): 12 languages
+- **Optional clock** in the middle of the compact island, for the place a Mac has its notch: Settings → General → Show clock in the island (#788 by @eduardo-qts)
+- **Antigravity questions** — the pill turns to a question with a sound and the island shows up (#709 by @Ohualtex)
+- **Linux**: the Coucou window no longer keeps a core busy once closed, on KDE and other desktops whose webview doesn't report it hidden (#792, reported by @Michael-1103)
+- The island's error view shows the real error and who stopped
+
+## 0.5.1 — October 18, 2026
+
+- **WhatsApp in one click** *(macOS, GitHub build)* — no more GitHub, zip or Terminal: Settings → Integrations → WhatsApp → **Install WhatsApp**. Coucou downloads GOWA, the open-source gateway, for your Mac (about 15 MB, once), checks it against the SHA-256 GOWA publishes, starts it, and shows the QR code to scan. It starts and stops with Coucou, and **Update** fetches GOWA's latest version. Your own gateway (GOWA by hand, OpenWA, another address) moves under **Advanced**
+- GOWA started by Coucou no longer fetches its own web dashboard from GitHub at each start (Coucou is the interface)
+
+## 0.5.0 — October 18, 2026
+
+WhatsApp in the notch, Mochi who feels your Mac, a screen capture for Claude, and dictation that writes prompts or translates. All of it free and open source.
+
+- **WhatsApp in the notch** *(macOS, GitHub build, experimental)* — your incoming WhatsApp messages in a new green pill, one row per conversation with initials, name, the last message and the unread count; photos, voice messages and documents show as a label. Click a conversation to see its last ten messages and reply: Return sends, Shift-Return starts a new line, Esc goes back. Mochi smiles at a new message (with a sound if sounds are on). Groups stay quiet unless you're mentioned, chats you ignore never show, and read receipts go only when you open a conversation or reply. It goes through an unofficial gateway that runs on your Mac ([GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice), or [OpenWA](https://github.com/rmyndharis/OpenWA)), which Coucou can start and stop for you; scan its QR code right in Settings → Integrations → WhatsApp. Nothing leaves your Mac: messages stay in memory, are never logged or saved, and are forgotten when Coucou quits. Use it on your own account only: WhatsApp may restrict accounts that abuse it. Off by default; see [WhatsApp (experimental)](README.md#whatsapp-experimental)
+- **Mochi feels your Mac** — under full processor load he panics (hops, trembling eyes, sweat), he flushes when the Mac is warm, puffs up when memory is short, gets heavy eyelids under 20 % battery and falls asleep under 10 %; plugging in wakes him. Point at Mochi to see why ("CPU 94 % · node, Google Chrome"). Read only while Mochi is on screen. Settings → General → Mochi and your Mac
+- **Screen capture for Claude** *(macOS, GitHub build)* — ⌃⌥X: select part of the screen, Mochi swallows the image, then Paste (⌘V, or ⌃V in a terminal where Claude Code takes images), Copy, Annotate (arrows, boxes, pen) or Ask Claude. With a capture on the island, holding the Flow key pastes the image, then your words
+- **Flow: prompt mode and translation** *(macOS, GitHub build)* — what you say can become a structured prompt for an agent (goal, context, steps, constraints), or be pasted in another language: about 70 languages and regional variants. One Claude call with your key; if it's late, your words are pasted as heard. Coucou → Flow → Settings
+- **Notetaker** — the other person's voice coming back through your speakers is no longer written as yours, one voice is no longer split into two persons, and Claude fixes misheard words and keeps the names it learns for your next calls. Any line can be edited or given to another person
+- **iPhone** — a request you open from a notification now says whether it expired or was already answered on your Mac
+- The island's error view shows the real error and who stopped (Claude Code, an agent or n8n), with buttons that work; no false "your words are copied" after dictating into Electron apps; the Coucou window's sidebar is centred
+## Windows and Linux 0.5.0 — October 15, 2026
+
+Windows and Linux catch up with the Mac's 0.3.0 and 0.4.0: the Coucou window, Flow dictation, the Notetaker and « OK Coucou ». All of it free and open source.
+
+- **Coucou, the app** — Coucou now has its own window and sits in the taskbar. On the left, **Flow** (Dictation, Notetaker, Statistics, Dictionary, Snippets, Styles, Settings), then **Notch** (General, Active pills, Agents, Chat, OK Coucou, Integrations, Android phone, Shortcuts): the settings you had, in the same place as on the Mac, with the little Mochis walking around each page. It opens when you launch Coucou yourself, not when it starts with your computer (Flow → Settings → App)
+- **Flow dictation** — hold a key anywhere (right Ctrl by default, or right Alt, right Shift, Ctrl + Win / Ctrl + Super), speak, let go: your words are pasted where you type. Two quick taps keep it listening hands-free until the next tap; Esc cancels; the pill's toolbar pastes the last dictation again. Clipboard history managers leave the dictation out and the clipboard gets back what it held. Off by default. On Linux it works on X11 and on Wayland: there the desktop holds the key for Coucou through its shortcuts portal (Ctrl+Alt+V unless you pick others) and the first paste asks once to let Coucou type for you
+- **Parakeet, on your computer** — dictation, the Notetaker and « OK Coucou » run on NVIDIA's Parakeet through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), on the CPU: accurate, offline, 25 languages. Nothing is downloaded until you click Download (about 700 MB, once, checked against its SHA-256)
+- **The pill** — the same see-through pill as on the Mac, at the bottom of the screen or on its left or right edge: hover it for the toolbar (dictate, record a call, open Coucou), Mochi and nine dots that follow your voice while you speak, messages in a bubble next to it
+- **Your words, your way** — Dictionary, Snippets, Styles per app (an optional clean-up by Claude with your own key) and Statistics, as on the Mac. The history stays on your computer, kept as long as you choose
+- **Notetaker** — click Record a call: Coucou records your microphone and what the computer plays (WASAPI loopback on Windows, the PulseAudio or PipeWire monitor on Linux; no bot joins the call), shows the words live, then writes the transcript person by person — you, Person 2, Person 3… which you can rename — with a summary, key points and to-dos by Claude with your key. Copy it as Markdown or export it. The audio is deleted once the transcript is written; tell the people in the call that you record
+- **« OK Coucou »** — say it, then ask anything, in any of Parakeet's languages: add or swap pills, play, pause or search on Spotify, how much you made on Stripe today, what your agents are doing, the weather or the news (web search), open an app, prepare an email that opens in your mail app for you to send. Claude is the brain, with your own key; only the words after « OK Coucou » leave the computer, never audio. Coucou answers in the pill and out loud, with the system's voice or ElevenLabs with your key. Off by default: Notch → OK Coucou
+- **Spotify on Windows** — the Spotify pill and card, read from the system media controls, and Mochi dances to it (#493 by @alexisrja)
+- The island's size follows the webview's zoom, so it no longer comes up cut on scaled displays (#467 by @Ohualtex); pill labels leave room for Mochi (#522 by @Ohualtex); the Claude Desktop pill opens the Microsoft Store app through its link (#417 by @Ohualtex); the Claude Code pill has the same name everywhere (#409 by @Ohualtex); the OpenCode plugin works with OpenCode 2 (#530 by @Ohualtex)
+
+## 0.4.0 — October 14, 2026
+
+Coucou becomes a real app: a window in the Dock, dictation everywhere on the Mac, and notes of your calls. All of it free and open source.
+
+- **Coucou, the app** *(macOS, GitHub build)* — Coucou now has its own window and sits in the Dock. Open it and everything is in one place: on the left, **Flow** (Dictation, Notetaker, Statistics, Dictionary, Snippets, Styles, Settings), then **Notch** (General, Active pills, Agents, Chat, Integrations, Voice, Shortcuts), the same settings as before. The window opens when you launch Coucou yourself, not when it starts with your Mac; ⌘, opens the settings, and the Dock icon can be turned off in Settings → App. Each page has its own colour and a band of little Mochis that walk around, wave, hop and react when you poke them, over a deep black with particles that drift away from the pointer
+- **Flow dictation** *(macOS, GitHub build)* — hold a key anywhere on the Mac (right ⌥ by default, or fn, right ⌘ or right ⌃), speak, let go: your words are pasted where you type, like Wispr Flow. Two quick taps keep it listening hands-free until the next tap; Esc cancels; ⌃⌘V pastes the last dictation again. ⌘V follows your keyboard layout, clipboard managers leave the dictation out, and the clipboard gets back what it held. When no text field has the focus, the words are kept on the clipboard and a message says so. Off by default; it needs the Accessibility permission to see the key and paste
+- **The pill** — a small see-through pill rests at the bottom of the screen while Flow dictation is on. Hover it and it opens into a toolbar: Mochi, dictate hands-free, record a call, open the Coucou window, each with its tip. When you speak, Mochi and nine dots rise and fall with the low and high notes of your voice. Put it at the bottom, on the left or on the right of the screen: on the sides it stands up and everything in it is stacked. Messages (a dictation kept on the clipboard, a microphone that is off) show in a bubble next to it, with a button to act
+- **Your words, your way** — **Dictionary**: names Coucou always spells right, and replacements (« cloud code » → « Claude Code »). **Snippets**: say a short phrase, the whole text is pasted, untouched. **Styles**: an optional clean-up by Claude with your own key (no « um », no repeats, your corrections applied), as said, natural or polished, per app. **Statistics**: words, time saved, speed, words per day and the apps you dictate in. Your history stays on your Mac, kept as long as you choose
+- **Parakeet** *(macOS, GitHub build)* — dictation can run on NVIDIA's Parakeet through [FluidAudio](https://github.com/FluidInference/FluidAudio), on the Mac's Neural Engine: more accurate, offline, 25 languages. Nothing is downloaded until you click Download in Coucou → Settings (about 650 MB, once); until then the Mac's own recognition is used. Apple silicon only
+- **Notetaker** *(macOS, GitHub build)* — click Record a call: Coucou records your microphone and what the Mac plays (no bot joins the call), shows the words live, then writes the transcript person by person — you, Person 2, Person 3… which you can rename — with a summary, key points and the to-dos, by Claude with your key or by Apple Intelligence on your Mac. Copy it as Markdown or export it. The pill turns red with the time and a button to stop. Notes stay on your Mac and the audio is deleted once the transcript is written; tell the people in the call that you record
+
+## Android 0.2.0 — October 13, 2026
+
+- **Home-screen widgets** — nine to pick from, each with a real preview in the widget picker: Mochi at a glance, Mochi's mood, Approvals waiting, Finished today, Plan usage, a one-line status with four buttons, all your agents, Mochi big (Mochi, plan usage and six buttons), and the agents summary, now on the same card. The colour follows your most urgent agent: orange when something waits for you, blue while it works, green when it's done, grey when the computer isn't there. Plan usage has its own colours (teal, yellow from 75 %, red from 90 %, with the time it resets). Read-only: the buttons only open a screen of the app, and a request is always decided in the app, behind your fingerprint. No background refresh: they redraw when something changes, plus once at midnight so Finished today starts again at zero, and that count stays on the phone (#620 by @Rhytam23)
+- Working notes that were not meant to ship are gone from `android/` (#618 by @Rhytam23)
+
+## Android 0.1.0 — October 11, 2026
+
+- **Coucou for Android**, by @Rhytam23 — your agents, Allow and Deny with your fingerprint or screen lock (even on a locked phone), answers to Claude's questions, chat through the computer's own keys, plan usage and services, an optional island over other apps, a widget, a quick-settings tile and an ongoing notification. It pairs with Coucou 0.4.0 or later on Windows or Linux. Android 11 or later, English only; a signed APK on the [release page](https://github.com/Louis-CFM/coucou/releases/tag/android-v0.1.0) (#501 by @Rhytam23)
 
 ## Windows and Linux 0.4.0 — October 11, 2026
 

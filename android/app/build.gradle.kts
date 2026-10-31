@@ -22,10 +22,10 @@ android {
         applicationId = "com.coucou.android"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-        // English only: libraries' other languages are left out of the app too.
-        resourceConfigurations += listOf("en")
+        versionCode = 3
+        versionName = "0.3.0"
+        // The app's languages (English and the translations in i18n/translations); the libraries' other languages are left out of the app.
+        resourceConfigurations += listOf("en", "fr", "es", "pt-rBR", "b+zh+Hans", "hi", "bn", "ru", "in", "ar", "tr")
     }
     signingConfigs {
         val keystore = releaseKeystore
@@ -57,6 +57,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     sourceSets["main"].java.srcDirs("src/main/kotlin")
+    sourceSets["debug"].java.srcDirs("src/debug/kotlin") // the Widgets preview receiver: debug builds only
     sourceSets["test"].java.srcDirs("src/test/kotlin")
 }
 

@@ -280,6 +280,69 @@ mod display_tests {
     }
 }
 
+/// Calculates the zoom correction factor so that 1 CSS pixel equals 1 window logical pixel.
+/// If WebView2's devicePixelRatio differs from the window's scale factor (e.g. system text
+/// scaling or multi-monitor DPI mismatch), adjusting the webview zoom ensures the island
+/// canvas (PANEL_W / EXPANDED_W) fits within the window without clipping.
+pub fn calculate_zoom_correction(current_zoom: f64, scale: f64, dpr: f64) -> Option<f64> {
+    if dpr <= 0.0 || !dpr.is_finite() || scale <= 0.0 || !scale.is_finite() {
+        return None;
+    }
+    if (dpr - scale).abs() / scale < 0.02 {
+        return None;
+    }
+    let new_zoom = (current_zoom * (scale / dpr)).clamp(0.25, 4.0);
+    Some(new_zoom)
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use super::*;
+
+    #[test]
+    fn zoom_correction_is_none_when_dpr_matches_window_scale() {
+        assert_eq!(calculate_zoom_correction(1.0, 1.0, 1.0), None);
+        assert_eq!(calculate_zoom_correction(1.0, 1.25, 1.25), None);
+        // Within 2% threshold
+        assert_eq!(calculate_zoom_correction(1.0, 1.0, 1.01), None);
+    }
+
+    #[test]
+    fn zoom_correction_adjusts_for_dpi_mismatch() {
+        // Issue #346: 100% scale display (scale 1.0) but WebView2 dpr = 1.25
+        let zoom = calculate_zoom_correction(1.0, 1.0, 1.25);
+        assert_eq!(zoom, Some(0.8));
+
+        // 125% display with 125% text scale (dpr 1.5625 vs scale 1.25)
+        let zoom = calculate_zoom_correction(1.0, 1.25, 1.5625);
+        assert_eq!(zoom, Some(0.8));
+
+        // 150% display with 100% webview dpr
+        let zoom = calculate_zoom_correction(1.0, 1.5, 1.0);
+        assert_eq!(zoom, Some(1.5));
+    }
+
+    #[test]
+    fn zoom_correction_handles_invalid_inputs() {
+        assert_eq!(calculate_zoom_correction(1.0, 0.0, 1.0), None);
+        assert_eq!(calculate_zoom_correction(1.0, 1.0, -1.0), None);
+        assert_eq!(calculate_zoom_correction(1.0, f64::NAN, 1.0), None);
+        assert_eq!(calculate_zoom_correction(1.0, 1.0, f64::INFINITY), None);
+    }
+
+    #[test]
+    fn a_top_taskbar_moves_the_island_down_and_nothing_else_does() {
+        // Taskbar at the bottom (or none): the work area starts at the top.
+        assert_eq!(top_inset_from(0, 0), 0);
+        // A 48 px taskbar at the top of a display placed at y = -1080.
+        assert_eq!(top_inset_from(-1080, -1032), 48);
+        // Nonsense from the system never pushes the island off the display.
+        assert_eq!(top_inset_from(0, -20), 0);
+        assert_eq!(top_inset_from(0, 900), 0);
+    }
+}
+
+
 pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
     match target_monitor(app, pref) {
         Some(m) => {
@@ -299,6 +362,23 @@ pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
 }
 
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
+/// Windows: how far a taskbar docked at the top of this display (or another
+/// app bar there) pushes the island down, read from the display's work area,
+/// so the island sits under it (#956). An auto-hidden taskbar takes no work
+/// area and moves nothing. Linux anchors the island to the screen edge: 0.
+fn top_inset(m: &tauri::Monitor) -> i32 {
+    if cfg!(windows) {
+        top_inset_from(m.position().y, m.work_area().position.y)
+    } else {
+        0
+    }
+}
+
+fn top_inset_from(monitor_y: i32, work_y: i32) -> i32 {
+    let inset = work_y - monitor_y;
+    if (0..200).contains(&inset) { inset } else { 0 }
+}
+
 pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let Some(win) = window(app) else { return };
     let Some(m) = target_monitor(app, pref) else { return };
@@ -311,7 +391,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let y = mp.y;
+    let y = mp.y + top_inset(&m);
 
     // GTK never sizes a non-resizable window below its natural size (200 px
     // here), so on Linux the 6 px wake strip would stay a 200 px block. tao
@@ -327,6 +407,19 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+
+    // On Windows, moving across displays or waking from the strip can clamp or lag
+    // the resize. If the physical inner size differs from what was requested, retry once.
+    if let Ok(got) = win.inner_size() {
+        if got.width != pw || got.height != ph {
+            crate::log::line(format!(
+                "window size mismatch: wanted {pw}x{ph}, got {}x{} (scale {scale}, monitor {}x{})",
+                got.width, got.height, ms.width, ms.height
+            ));
+            let _ = win.set_size(PhysicalSize::new(pw, ph));
+            let _ = win.set_position(PhysicalPosition::new(x, y));
+        }
+    }
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here
@@ -339,7 +432,7 @@ fn current_screen_key(app: &AppHandle) -> Option<(i32, i32, u32, u32, u64)> {
     let m = target_monitor(app, &pref)?;
     let p = m.position();
     let size = m.size();
-    Some((p.x, p.y, size.width, size.height, m.scale_factor().to_bits()))
+    Some((p.x, p.y + top_inset(&m), size.width, size.height, m.scale_factor().to_bits()))
 }
 
 /// Emits `cursor` (window-logical coordinates) at ~60 Hz while the island is

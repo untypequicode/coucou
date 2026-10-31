@@ -61,7 +61,7 @@ You can also [build it yourself](#build-it-yourself).
 | Click a file in the session ticker | Its diff opens in the island; ↗ opens the file in VS Code, ‹ or `Esc` goes back |
 | `Esc` | Closes the island |
 | Put a file named like one of Mochi's sounds (`finish.wav`, `approval.mp3`, `greet.m4a`…) in the sounds folder | It replaces that sound after **Settings → General → Reload sounds**. **Open sounds folder** shows the folder: `~/.config/coucou/sounds` on Linux, `%APPDATA%\Coucou\sounds` on Windows |
-| Tray icon | Open, Weekly recap, Wardrobe…, Settings…, Pause, Quit |
+| Tray icon | Open, Weekly recap, Wardrobe…, Settings…, Pause, Quit — and **Update Coucou to X…** while a new version is out |
 | `Ctrl+Alt+Space` | Opens the chat, from any app |
 | `Ctrl+Alt+A` | Jumps to the waiting permission or question |
 | `Ctrl+Alt+T` | Brings the session's window forward ("Open terminal") |
@@ -127,6 +127,29 @@ session, and they are forgotten an hour after the last edit or when the session
 ends. When Claude finishes, the card keeps the first paragraph of its final
 answer on one line, still, until the next prompt.
 
+## Flow, the Notetaker and « OK Coucou »
+
+Coucou has its own window (tray → Open, or launch Coucou again): **Flow** on the
+left (Dictation, Notetaker, Statistics, Dictionary, Snippets, Styles, Settings),
+then **Notch**, the island's settings. Everything below runs on
+[Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) through
+[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), on your CPU and offline;
+nothing is downloaded until you click **Download** (about 700 MB, once, checked
+against its SHA-256, kept in Coucou's data folder under `Models`).
+
+| What you do | What happens |
+|---|---|
+| Hold **right Ctrl** anywhere, speak, let go | Your words are pasted where you type. Pick another key in Flow → Settings: right Alt, right Shift, Ctrl + Win (Ctrl + Super on Linux) |
+| Tap the key twice | Hands-free: speak as long as you like, tap once to paste. `Esc` cancels |
+| Hover the pill at the bottom of the screen | Dictate, record a call, open Coucou. Put the pill on the left or right edge in Flow → Settings |
+| Click **Record a call** | Your microphone and what the computer plays, transcribed live, then written person by person with a summary and to-dos by Claude (your key). The audio is deleted once the transcript is written |
+| Say **« OK Coucou »**, then ask | Claude (your key) answers in the pill and out loud: pills, Spotify, your services' numbers, your agents, web search, open an app, an email prepared in your mail app. Turn it on in Notch → OK Coucou |
+
+Your voice never leaves the computer. With Claude's clean-up (Flow → Styles),
+a call's summary or « OK Coucou », the text — never the audio — goes to
+Anthropic with your key; an ElevenLabs voice for the answers sends them to
+ElevenLabs with yours.
+
 ## Your pills
 
 **Settings… → Active pills** lists the tools you use, from the same catalog as
@@ -168,7 +191,7 @@ reset times. Both are off by default; turn them on in **Settings… → Plan usa
   `%USERPROFILE%\.claude\settings.json`, takes a dated backup and writes only
   after your click, with the same writer as the hooks: the status line becomes `coucou-hook --statusline`, which
   passes only the limits on (300 ms at most) and runs the status line you had
-  before — kept in `statusline-previous.json` next to the relay — with the same
+  before — kept in `statusline-previous.json` outside `bin` in Coucou's data folder — with the same
   input, printing what it prints. On Windows that one runs through Git Bash, as
   Claude Code runs it (`CLAUDE_CODE_GIT_BASH_PATH`, then the Git for Windows that
   `git.exe` on `PATH` belongs to, then the usual install folders); it gets 10 s
@@ -201,9 +224,10 @@ Weekly recap** turns it off or clears it.
 
 ## Languages
 
-Coucou speaks the same ten languages as the Mac app: English, 简体中文, हिन्दी,
-Español, العربية, Français, বাংলা, Português (Brasil), Русский and Bahasa
-Indonesia. **Settings… → General → Language** picks one; **System** (the
+Coucou speaks twelve of the Mac app's languages: English, 简体中文, हिन्दी,
+Español, العربية, Français, বাংলা, Português (Brasil), Русский, Bahasa
+Indonesia, Deutsch and Türkçe (Traditional Chinese and Thai are on the Mac
+only for now). **Settings… → General → Language** picks one; **System** (the
 default) follows your system's language when it is one of these, English
 otherwise. The island, the settings window and the tray menu switch at once —
 nothing restarts, and the island keeps its sessions, steps and chat.
@@ -224,6 +248,21 @@ side (tray, errors) embeds the same two files.
 **Settings… → Claude** takes your Anthropic API key. Keys live in the **Windows
 Credential Manager**, never on disk and never in the interface — the island can
 only ask whether a key exists. Same for every integration key.
+
+**No key? Use your subscription.** **Settings… → Chat → Your AI
+subscriptions** has one switch per provider: on, the chat goes through the
+provider's official terminal tool, signed in with your own account — Claude
+Code (Claude plan), Antigravity CLI or Gemini CLI (Google AI plan), Codex CLI
+(ChatGPT plan), Cursor CLI and GitHub Copilot CLI (`cli_relay.rs`). Each row
+says whether the tool is installed (on PATH or in the usual install folders),
+links to its install page and gives the command to sign in once. Coucou reads
+no credential: the tool answers exactly as it does in a terminal. Each run is
+read-only (plan or ask modes, no shell, no edits), loads none of your hooks,
+MCP servers or extensions where the tool can turn them off, saves no session,
+and searches the web for the chat only; a dropped file is read with no web at
+all. Through npm's `.cmd` shims the prompt goes in on stdin. Flow's clean-up
+and the notes of a call use Claude Code when no Anthropic key is saved;
+« OK Coucou » still needs the key: its tools are Coucou's own.
 
 The chat also talks to **Google AI (Gemini)**, **OpenAI** and **OpenRouter**:
 add their keys in **Settings… → Chat providers**, then click the model name
@@ -257,7 +296,8 @@ goes where you told Coucou to send it. The gateway's host is written to the log
 once; the key never is.
 
 No telemetry. The only network requests Coucou makes are to the services you
-configure yourself.
+configure yourself, and — once you agree — to GitHub's releases API, to tell you
+about new versions (see [New versions](#new-versions)).
 
 ## GitHub
 
@@ -279,6 +319,127 @@ someone requests your review. Pull requests are checked every 5 minutes, every
 minute while a CI is running, and as soon as you open the card on data older
 than a minute; contributions every 30 minutes. Nothing is fetched while the pill
 is off or Coucou is paused.
+
+## Mail (classic Outlook, Windows)
+
+Turn the **Mail** pill on in Notch → Active pills. Coucou reads the Outlook already open on
+your PC — the classic Outlook of Microsoft 365, through its own COM objects — with no sign-in,
+no app to register at Microsoft and no admin consent. It never starts Outlook, and a closed
+Outlook costs nothing. The new Outlook for Windows has no COM objects, so it is not reached
+this way. Linux has no Outlook: the pill is Windows only.
+
+| What you do | What happens |
+|---|---|
+| Open the Mail pill | Your newest messages, unread ones tinted, a ⚑ on the flagged ones. The magnifier searches every inbox: free words, `from:anne`, `subject:"May quote"`. Filters: All, Unread, Important, Today |
+| Click a message | Its sender, subject and the start of its text. **Open in Outlook**, **Reply** (Outlook's own window: nothing is sent from Coucou), **Mark as read**, **Important**, **Junk**, and in ⋯ **Always important (VIP)** or **Always ignore this sender** |
+| Coucou → Mail → Overview | **Sort new messages automatically** (off by default): only what arrives after you turn it on, each message once. VIPs are flagged, banned words send to Junk, then the first rule that matches acts. A journal of every action, each with **Undo** |
+| Coucou → Mail → Rules, Banned words, VIP | "If the sender / domain / subject / text / account contains … then Junk / important / read / move to a folder". Banned words are whole words: "sale" does not catch "Salesforce". A VIP is an address or a whole domain (`@client.com`) |
+| Turn on **Mail** next to the model in the chat | The AI gets your 40 newest messages (text and attachments for the newest and for the ones you name) and may answer with a plan: sort, reply drafts, sends, a mail merge that gives each recipient their page of a PDF, saving attachments. The plan shows as a card: the mails to send, the ones that can't be sent in red, **Send me a test**, and **Run**, which waits 5 seconds (Cancel) before anything happens |
+
+Coucou never deletes a message, and never sends one without your click on Run. Your mail
+goes only to the chat's AI you picked (your key or your subscription), and only while the
+chat's Mail switch is on. On some company PCs, Outlook may ask whether to let a program use
+it: that is Outlook's own security prompt, set by your IT department.
+
+## WhatsApp (experimental)
+
+The same as on the Mac. Your WhatsApp messages in the island, through a
+gateway that runs on this computer. It is off until you turn it on in
+**Settings… → Integrations → WhatsApp**. It is unofficial: use it on your own
+account only, because WhatsApp may restrict accounts that abuse it.
+
+**Setting it up**
+
+- **Install WhatsApp** downloads [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice),
+  the open-source gateway, from its GitHub releases. It picks the zip for this
+  system (Windows or Linux, amd64 or arm64) and checks it against the SHA-256
+  GOWA publishes; nothing is installed if they differ.
+- Coucou then unpacks GOWA into `%LOCALAPPDATA%\Coucou\GOWA` (Windows) or
+  `~/.local/share/coucou/GOWA` (Linux) and starts it on `127.0.0.1` only, with
+  media downloads off. It stops GOWA when Coucou quits.
+- Scan the QR code in Settings with your phone: **WhatsApp › Settings › Linked
+  devices › Link a device**.
+- **Update** fetches the latest GOWA. Nothing goes to GitHub except on these
+  two clicks.
+
+**Using it**
+
+- The island lists one row per conversation, with its initials, name, last
+  message and unread count. Photos, voice messages and other media show as a
+  label; Coucou never downloads them.
+- Click a conversation for its last ten messages and a reply field. **Enter**
+  sends, **Shift+Enter** starts a new line and **Escape** goes back. Nothing is
+  ever sent without your Enter or click.
+- On a new message Mochi smiles, with the "pop" sound if sounds are on.
+- Groups stay quiet unless you are mentioned. A right-click on a row ignores
+  that chat.
+- Read receipts are sent only when you open a conversation, or only when you
+  reply if you turn that setting off.
+
+**Your own gateway**
+
+Under **Advanced** you can use your own GOWA or [OpenWA](https://github.com/rmyndharis/OpenWA)
+at a local address, with its credential (GOWA's `user:password` or OpenWA's
+API key), and change the port of Coucou's webhook (47823).
+
+- The address and the credential are stored in the Credential Manager or the
+  Secret Service, never on disk.
+- New messages arrive on a webhook bound to `127.0.0.1` and signed by the
+  gateway. When the webhook isn't working, Coucou checks for new messages
+  every 20 s instead.
+- Messages stay in memory only: they are never logged or saved, and they are
+  forgotten when Coucou quits or WhatsApp is turned off.
+- Nothing runs while the integration or its pill is off.
+
+**Different from the Mac**
+
+- There is no macOS Focus to follow, so "Stay quiet during a Focus" is not
+  offered.
+- The card's ↗ opens WhatsApp Web, as there is no WhatsApp app here to bring
+  forward.
+- You type the path to your own GOWA binary instead of picking it.
+
+## New versions
+
+Coucou can tell you when a new version is out, and on Windows install it in one
+click. Nothing goes to GitHub before you agree: about 30 seconds after launch the
+island asks once, **Get new versions from the island?** (asked again a day later
+at most if you leave the card unanswered, never over a permission or a question).
+**Settings → General → Updates** has the same switch, and **Check now**, which
+looks once even with the switch off.
+
+Once allowed, Coucou asks GitHub at launch and every 6 hours:
+`GET https://api.github.com/repos/Louis-CFM/coucou/releases?per_page=30`,
+unauthenticated, no cookies, nothing about you. It keeps the published
+`windows-vX.Y.Z` releases (`linux-vX.Y.Z` on Linux — never the rolling
+`windows-latest` / `linux-latest`, drafts or prereleases) and takes the highest.
+When it is newer than yours, the island opens on it once a day at most, with
+Mochi surprised: **Coucou X is out**, the first line of its *What's new*, and the
+version you have; **Update now · What's new · Later**. The tray menu offers
+**Update Coucou to X…** for as long as it is out.
+
+**Update now** (Windows) uses the installer this copy came from:
+
+- the per-user `setup.exe` (Coucou in `%LOCALAPPDATA%\Coucou`, with its
+  `uninstall.exe`): `Coucou-Windows-X.Y.Z-setup.exe /P /UPDATE /R` — passive,
+  no "reinstall or uninstall?" step, the old uninstaller never runs, your
+  shortcuts and settings stay, and the installer starts Coucou again;
+- the per-machine `.msi` (Coucou in `Program Files\Coucou`):
+  `msiexec /i Coucou-Windows-X.Y.Z.msi /passive AUTOLAUNCHAPP=True`, which asks
+  for admin rights as installing it by hand does, then starts Coucou again;
+- anything else — the portable exe, a build — gets **Get it on GitHub**, the
+  release page, instead.
+
+The installer is downloaded into a temporary folder, following redirects only to
+`github.com`, `api.github.com` and `*.githubusercontent.com`, and checked
+against the SHA-256 GitHub publishes for that file (the asset's `digest`). No
+checksum, or one that doesn't match, and nothing is installed. Then it runs and
+Coucou quits. The checksum proves the file is exactly the one on the release
+page; like a download by hand, it doesn't prove who uploaded it (the installer
+isn't code-signed yet).
+
+On Linux the card and the tray item point to the release page: AppImage, .deb,
+.rpm and the Arch package are updated the way you installed them.
 
 ## Build it yourself
 
@@ -362,7 +523,7 @@ Linux.
 | Gemini CLI | `.gemini\settings.json` | asked in Gemini CLI |
 | Antigravity | `.gemini\config\hooks.json` (a `coucou` hook group) | asked in Antigravity |
 | Cursor Agent | `.cursor\hooks.json` — Claude Code in Cursor's terminal also goes on the Cursor pill, through the Claude Code hooks | asked in Cursor |
-| Claude Desktop (Windows) | nothing to install: Claude Code sessions from the Claude app are tagged by the relay | asked in the Claude app |
+| Claude Desktop | nothing to install: Claude Code sessions from the Claude app are tagged by the relay | asked in the Claude app |
 | OpenCode | plugin `.config\opencode\plugins\coucou.js` | asked in OpenCode |
 | Amp | plugin `.config\amp\plugins\coucou.ts` | asked in Amp |
 | Hermes Agent | plugin `.hermes\plugins\coucou\` — then `hermes plugins enable coucou` once | asked in Hermes |
@@ -397,6 +558,30 @@ own window.
 
 ## What's different from the Mac version
 
+- **Flow dictation** pastes with `Ctrl+V` (`Ctrl+Shift+V` in a terminal),
+  typed by `SendInput` on Windows and XTest on X11, and puts back what the
+  clipboard held once it is pasted; clipboard history (Windows, KDE, GNOME
+  extensions) leaves the dictation out. On **Wayland** no app may watch the
+  keyboard: the desktop holds the dictation key through its GlobalShortcuts
+  portal (`Ctrl+Alt+V` unless you pick others when it asks) and the
+  RemoteDesktop portal types the paste, asked once and remembered. Desktops
+  without those portals (older GNOME) dictate from the pill's microphone and
+  leave the words on the clipboard. The Mac's fn key and Apple's own
+  recognition have no equivalent: Parakeet is the only engine.
+- **The Notetaker** records what the computer plays through WASAPI loopback on
+  Windows and the default output's monitor on Linux (PulseAudio or PipeWire).
+  The people in a call are told apart by
+  [pyannote](https://github.com/pyannote/pyannote-audio)'s segmentation and
+  3D-Speaker's voice prints, also on the CPU. Summaries are Claude's only:
+  there is no Apple Intelligence here.
+- **« OK Coucou »** listens with a small energy detector and Parakeet instead of
+  the Mac's speech recognizer, so it understands Parakeet's 25 languages.
+  Emails open in your default mail app through a `mailto:` link, with no
+  contact lookup and no attachment; « play » something on Spotify opens its
+  search rather than starting a track; apps open from the Start menu's
+  shortcuts or Linux's `.desktop` entries. The system voice is the webview's;
+  where WebKitGTK has none, `spd-say` (speech-dispatcher) or `espeak-ng`
+  speaks if installed.
 - No notch, so the island lives at the top centre of the screen and retracts into
   the top edge instead of hiding in a notch.
 - Permission approval works from **any** terminal; the Mac build only listens to
@@ -413,12 +598,25 @@ own window.
   the island, and reopened by clicking the island, Open in the tray or **Go to
   alert**.
 - Apple Music, the one pill from the Mac catalog with nothing behind it here,
-  is left out. Spotify is on Linux only (see [Linux](#linux)): Windows has
-  nothing to read it from yet.
+  is left out.
+- **Spotify** (Settings → Integrations) is read from the system media
+  controls, the session Spotify publishes for the media keys: the same pill
+  and card as on Linux (cover, progress bar, play/pause, previous, next,
+  shuffle, repeat), and Mochi dances while it plays. Nothing is polled: one
+  thread waits for the session's change events while the pill is declared.
+  The volume is Spotify's own in the Windows mixer. Works with the installer
+  from spotify.com and the Microsoft Store app; **Open Spotify** goes through
+  its `spotify:` link, and without Spotify **Get Spotify** opens its download
+  page. Windows gives no Spotify link for the track, so an ad is told apart by
+  having a title and no artist or album.
 - Not in this version: sending a dropped file by email and dragging Mochi onto
   a window to attach it as context. On the Mac, email goes through Resend or
   Apple Mail's scripting; neither has a safe equivalent that attaches a file
   here, and the drop card would need a third button it doesn't have.
+- New versions: the Mac checks the downloaded app's Developer ID signature and
+  notarization; the Windows installer isn't code-signed yet, so it is checked
+  against the SHA-256 GitHub publishes for it, and the installer (not Coucou)
+  replaces the app and starts it again.
 - Cal.com shows the next bookings as a list rather than the Mac's calendar.
 - The Cursor pill carries both Cursor Agent's own hooks and Claude Code running
   in Cursor's terminal.
@@ -477,14 +675,19 @@ own window.
   without a restart (the Mac's **Restart Coucou** isn't needed). Arabic turns
   the island's text right to left but not its layout: Mochi and the pills keep
   their sides.
-- Mochi on the desktop dances only on Linux, to Spotify; on Windows there is
-  no music integration to dance to yet. While he dances he stays awake (the
+- Mochi on the desktop dances to Spotify. While he dances he stays awake (the
   Mac lets him doze off mid-dance). Dropping him on a window doesn't attach it
   to the chat. While he
   sleeps, the transparent square around him (120 px) takes the first mouse
   move, which wakes him and gives the rest back to the desktop.
 
 ## Linux
+
+To check toolbar collapse even when WebKitGTK loses the pointer-leave event,
+run `python3 scripts/test-linux-pill-hover.py target/release/coucou` from
+`windows/` after building. This native regression test uses a separate Xvfb
+display and temporary preferences; it requires Xvfb, xdotool, xwd, a C compiler
+and GTK3 development headers. It leaves captures under `target/pill-hover-test/`.
 
 The same app builds for Linux: everything that differs lives in
 `src-tauri/src/platform/`, and the relay's transport in `hook/src/unix.rs`.
@@ -510,10 +713,25 @@ makepkg -si
 It needs `webkit2gtk-4.1`, `gtk-layer-shell` and `libayatana-appindicator`
 (pulled in as dependencies); store API keys with GNOME Keyring or KWallet.
 
+On NixOS (or any system with Nix), the flake at the root of the repo builds it
+and runs it, Hyprland included:
+
+```bash
+nix run github:Louis-CFM/coucou      # or, in a clone: nix run .
+nix develop                          # a shell for `npm run tauri dev`
+```
+
+On NixOS, add `inputs.coucou.url = "github:Louis-CFM/coucou"` to your flake and
+`inputs.coucou.packages.${pkgs.system}.default` to `environment.systemPackages`.
+The package is marked unfree (the name, Mochi and the sounds are not free to
+redistribute, see `LICENSE-ASSETS.md`), and the flake lets only that package
+through. If the build stops on an npm hash after `package-lock.json` changed,
+copy the hash Nix prints into `linux/nix/package.nix`.
+
 What changes on Linux:
 
 - **The island** is a gtk-layer-shell overlay anchored to the top edge, over any
-  top panel, on compositors that support it: COSMIC, KDE Plasma, Hyprland, Sway
+  top panel, on compositors that support it: COSMIC, KDE Plasma, Hyprland, niri, Sway
   and other wlroots compositors. GNOME has no layer-shell and ignores where a
   Wayland window asks to go, so there Coucou runs through XWayland as a dock
   window: top centre, on every workspace, still there after Super+D.
@@ -527,7 +745,7 @@ What changes on Linux:
   they follow it only while it is over him, and "the cursor is far away" (so
   he may fall asleep) means it hasn't been over him for a few seconds.
 - **Mochi on the desktop** is a layer-shell surface on the island's display
-  (KDE Plasma, COSMIC, Hyprland, Sway…), placed with margins and dragged within
+  (KDE Plasma, COSMIC, Hyprland, niri, Sway…), placed with margins and dragged within
   that display; on X11 it is an ordinary always-on-top window that goes
   anywhere. **GNOME on Wayland** has no layer-shell and lets no app place its
   own window, so there Mochi can't leave the island: dragging him does nothing,
@@ -563,6 +781,13 @@ What changes on Linux:
   Coucou that is already open. The ids are `toggleIsland`, `openChat`,
   `goToAlert`, `jumpToTerminal`, `nextPill`, `prevPill`, `muteToggle`,
   `desktopToggle` and `wardrobeToggle`.
+  **niri** has no GlobalShortcuts portal, so its keys go in `~/.config/niri/config.kdl`:
+  ```kdl
+  binds {
+      Mod+Space { spawn "coucou" "--shortcut" "openChat"; }
+      Mod+Shift+Space { spawn "coucou" "--shortcut" "toggleIsland"; }
+  }
+  ```
 - **Keys** live in the Secret Service (GNOME Keyring, KWallet).
 - **Spotify** (Settings → Integrations) is read over MPRIS, Spotify's D-Bus
   interface on the session bus: the pill shows the track and plays, pauses
@@ -598,6 +823,9 @@ What changes on Linux:
   where it is missing, the island says so and Save still works.
 - What the Windows build leaves out, this one does too: sending a file by
   email and dragging Mochi onto a window.
+- **New versions** are announced (once you agree), but **Update now** opens
+  the release page: update the AppImage, .deb, .rpm or Arch package the way
+  you installed it.
 - **Open terminal** walks up from the relay through `/proc` (stopping at
   systemd, logins, ssh, session managers and panels, and at any process of
   another user) to the terminal or editor the session runs in, then brings its
@@ -608,10 +836,22 @@ What changes on Linux:
   - **KDE Plasma on Wayland**: a few lines of KWin script, loaded over D-Bus
     from `$XDG_RUNTIME_DIR`, activate the window by process ID and are unloaded
     right after; Plasma 5 and 6.
+  - **Hyprland**: `hyprctl -j clients` lists every window with its process ID,
+    native Wayland ones included (Zed, kitty, Alacritty, foot…); the nearest
+    ancestor's window gets a `hyprctl dispatch focuswindow`, which switches to
+    its workspace. `hyprctl` must be on the `PATH` of Coucou's session.
+  - **niri**: `niri msg --json windows` lists every window with its process ID,
+    native Wayland ones included (Zed, kitty, Alacritty, foot…); the nearest
+    ancestor's window gets a `niri msg action focus-window`, which scrolls to it
+    and switches to its workspace. `niri` must be on the `PATH` of Coucou's
+    session.
   - **kitty**, anywhere: its tab is selected too when remote control listens on
     a socket (`allow_remote_control` and `listen_on` in kitty.conf).
-  - **GNOME on Wayland** and other Wayland compositors let no app bring another
+  - **GNOME on Wayland** and other Wayland compositors without one of these let no app bring another
     app's native window forward (an XWayland one, such as VS Code's by default,
     still can be). There, and for a session under tmux, screen or ssh, whose
-    terminal is no ancestor, the folder opens in VS Code as before.
-- No **Claude Desktop** pill: the Claude app has no Linux build.
+    terminal is no ancestor, the folder opens in VS Code as before — or in Zed
+    when there is no `code` but a `zeditor` (or `zed`, from Zed's own installer
+    in your home folder) on the `PATH`. The diff card's ↗ does the same.
+- The **Claude Desktop** pill opens Anthropic's Linux app (its `.deb`): through
+  its `claude-desktop.desktop` entry, else its binary, else the `claude://` link.
