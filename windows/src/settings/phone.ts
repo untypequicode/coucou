@@ -11,10 +11,17 @@ import { t } from "../i18n/i18n";
 type Toggle = (on: boolean, onChange: (v: boolean) => void) => HTMLElement;
 
 /**
- * The relay block ("Away from home Wi-Fi") is hidden until a relay is ready to use: the code and its tests stay, and
- * turning this on shows it again. Nothing else changes.
+ * The relay block ("Away from home Wi-Fi") is hidden until a relay is ready to use: the code and its tests stay.
+ * Testers who start Coucou with COUCOU_RELAY_SETTINGS=1 see it (docs/RELAY_DEPLOY.md), and so does anyone whose relay
+ * is already on. Nothing else changes.
  */
-const SHOW_RELAY_SETTINGS = false;
+function relaySlot(makeToggle: Toggle, refreshPairing: () => void): HTMLElement {
+  const slot = h("div", {});
+  void Bridge.phoneRelayStatus().then((status) => {
+    if (status?.shown) slot.replaceWith(relayBlock(makeToggle, refreshPairing));
+  });
+  return slot;
+}
 
 export function phoneSection(on: boolean, makeToggle: Toggle, settings: Settings): HTMLElement {
   const detail = h("div", {});
@@ -64,12 +71,13 @@ export function phoneSection(on: boolean, makeToggle: Toggle, settings: Settings
       h("div", { class: "hint", text: t("The phone connects to {address}", { address }) }),
       h("div", { class: "hint", text: t("If Windows asks about the firewall, allow Coucou on private networks. The phone and this computer must be on the same Wi-Fi.") }),
       h("div", { class: "hint", text: t("Your phone finds this computer again by itself when the network changes. It is announced on your local network only while this switch is on. Some hotspots and guest networks block this.") }),
-      ...(SHOW_RELAY_SETTINGS ? [relayBlock(makeToggle, () => void refreshPairing())] : []),
+      relaySlot(makeToggle, () => void refreshPairing()),
       detailsBlock(makeToggle),
       answersBlock(makeToggle),
       diffsBlock(makeToggle),
       usageBlock(makeToggle),
       recapBlock(makeToggle),
+      launchBlock(makeToggle),
       servicesBlock(),
       chatBlock(makeToggle, settings),
     );
@@ -138,7 +146,7 @@ function relayBlock(makeToggle: Toggle, changed: () => void): HTMLElement {
   const state = h("div", { class: "hint" });
   const address = h("input", { type: "text", placeholder: "wss://", style: "width:100%", autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
   const access = h("input", { type: "password", style: "width:100%", autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
-  let current: PhoneRelayStatus = { enabled: false, url: "", hasAccess: false, state: "off" };
+  let current: PhoneRelayStatus = { enabled: false, url: "", hasAccess: false, state: "off", shown: true };
 
   const show = (status: PhoneRelayStatus | null) => {
     if (!status) return;
@@ -375,6 +383,39 @@ function recapBlock(makeToggle: Toggle): HTMLElement {
     {},
     h("div", { class: "row" }, h("label", { text: t("Show my weekly recap on the phone") }), switchEl),
     h("div", { class: "hint", text: t("The phone shows last week's recap: time coding, sessions, files, lines, commands, permissions and the agent you used most. Counts only. The project's name is added only if you also show session details.") }),
+    note,
+  );
+}
+
+/**
+ * Starting a Claude Code session from the phone: off until the user turns it on. The phone picks one of the projects of the island's
+ * "New Claude Code session" card (it is told their folder names, never a path) and sends what Claude should do; the terminal opens here
+ * as from that card. Rust re-reads this switch for every connection and for every request.
+ */
+function launchBlock(makeToggle: Toggle): HTMLElement {
+  const note = h("div", { class: "hint" });
+  const switchEl = makeToggle(false, (next) => {
+    void (async () => {
+      note.textContent = "";
+      try {
+        await Bridge.phoneLaunchSetEnabled(next);
+      } catch (err) {
+        switchEl.classList.remove("on");
+        switchEl.setAttribute("aria-pressed", "false");
+        note.textContent = String(err);
+      }
+    })();
+  });
+  void Bridge.phoneLaunchStatus().then((status) => {
+    if (!status) return;
+    switchEl.classList.toggle("on", status.enabled);
+    switchEl.setAttribute("aria-pressed", String(status.enabled));
+  });
+  return h(
+    "div",
+    {},
+    h("div", { class: "row" }, h("label", { text: t("Let the phone start Claude Code sessions") }), switchEl),
+    h("div", { class: "hint", text: t("From the phone you pick one of your recent projects and say what Claude should do; your terminal opens here with Claude Code, as from the island. The phone sees the projects' folder names only and asks for your fingerprint or screen lock each time.") }),
     note,
   );
 }

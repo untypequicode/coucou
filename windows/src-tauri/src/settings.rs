@@ -98,6 +98,8 @@ pub struct Settings {
     pub phone_usage: bool,
     /// Show last week's recap (counts only) on the phone (cap `recap`). Off by default; owned by Rust like the other phone switches.
     pub phone_recap: bool,
+    /// Let the phone start a Claude Code session in one of the island's projects (cap `launch`). Off by default; owned by Rust like the other phone switches.
+    pub phone_launch: bool,
     /// The service pills whose cards the phone may see, by pill id (cap `services`). None by default; owned by Rust like the other phone switches.
     pub phone_services: Vec<String>,
     /// Reach the phone through the user's own relay when it is not on this network (phone_link/relay_client.rs).
@@ -108,6 +110,18 @@ pub struct Settings {
     pub phone_relay_url: String,
     /// The date and time in the middle of the compact island. Off by default.
     pub show_clock: bool,
+    /// What the closed island shows at the top of the screen, where the Mac
+    /// has its notch: "mochi" (the Mac's island on a screen without a notch),
+    /// "time", "datetime", "claude" (the plan's usage), "music" (what plays),
+    /// "empty" (the black shape alone) or "hidden" (nothing; the top edge of
+    /// the screen wakes it). Kept as it comes, like `mochi_outfit`: the island
+    /// reads what it doesn't know as "mochi".
+    pub closed_island: String,
+    /// Settings → Agents → Antigravity → Approve commands from the notch: a shell command
+    /// none of Antigravity's rules covers waits for Allow / Deny on the island
+    /// (agy_approvals.rs). Off by default; owned by the Rust side like `phone_link`, so
+    /// what a webview sends back is ignored. The Mac's key is the same.
+    pub agy_approvals_enabled: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -174,10 +188,13 @@ impl Default for Settings {
             phone_diffs: false,
             phone_usage: false,
             phone_recap: false,
+            phone_launch: false,
             phone_services: Vec::new(),
             phone_relay: false,
             phone_relay_url: String::new(),
             show_clock: false,
+            closed_island: "mochi".into(),
+            agy_approvals_enabled: false,
         }
     }
 }
@@ -475,10 +492,13 @@ mod tests {
   "phoneDiffs": true,
   "phoneUsage": true,
   "phoneRecap": true,
+  "phoneLaunch": true,
   "phoneServices": ["integration_stripe"],
   "phoneRelay": true,
   "phoneRelayUrl": "wss://relay.example.workers.dev",
-  "showClock": true
+  "showClock": true,
+  "closedIsland": "music",
+  "agyApprovalsEnabled": true
 }"##;
 
     fn custom() -> Value {
@@ -654,6 +674,15 @@ mod tests {
         assert!(!parse(&custom_with("phoneRecap", None)).unwrap().phone_recap);
         assert!(parse(&custom_with("phoneRecap", Some(serde_json::json!(true)))).unwrap().phone_recap);
         assert!(!parse(&custom_with("phoneRecap", Some(serde_json::json!("yes")))).unwrap().phone_recap, "a wrong type does not switch it on");
+    }
+
+    #[test]
+    fn a_file_from_before_sessions_from_the_phone_keeps_it_off() {
+        // Starting a session from the phone is never on by default; an older file is not consent.
+        assert!(!Settings::default().phone_launch);
+        assert!(!parse(&custom_with("phoneLaunch", None)).unwrap().phone_launch);
+        assert!(parse(&custom_with("phoneLaunch", Some(serde_json::json!(true)))).unwrap().phone_launch);
+        assert!(!parse(&custom_with("phoneLaunch", Some(serde_json::json!("yes")))).unwrap().phone_launch, "a wrong type does not switch it on");
     }
 
     #[test]
@@ -996,10 +1025,13 @@ mod tests {
                 "phoneDiffs",
                 "phoneUsage",
                 "phoneRecap",
+                "phoneLaunch",
                 "phoneServices",
                 "phoneRelay",
                 "phoneRelayUrl",
                 "showClock",
+                "closedIsland",
+                "agyApprovalsEnabled",
             ]
         );
         let _ = std::fs::remove_dir_all(&dir);

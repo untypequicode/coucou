@@ -1,68 +1,65 @@
+# Maintainer: Dorian Luyet (@DurianTheWAV), with linux/nix/package.nix.
 {
-  description = "Coucou — Mochi lives at the top of your screen and keeps an eye on your Claude Code sessions";
+  description = "Coucou: Mochi lives at the top of your screen and keeps an eye on your AI coding agents";
+
+  # Try it:          nix run github:Louis-CFM/coucou
+  # On NixOS, add the flake to your inputs, then:
+  #   environment.systemPackages = [ inputs.coucou.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+  # Through the overlay instead, allow it in your own nixpkgs config, since the
+  # artwork is not free (see meta.license in linux/nix/package.nix):
+  #   nixpkgs.overlays = [ inputs.coucou.overlays.default ];
+  #   nixpkgs.config.allowUnfreePredicate = pkg: lib.getName pkg == "coucou";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     { self, nixpkgs }:
     let
+      inherit (nixpkgs) lib;
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
-      # The name, Mochi and the sounds are not free to redistribute
-      # (LICENSE-ASSETS.md), so the package is marked unfree; building it for
-      # yourself is allowed, and only this package is let through here.
+
       forAllSystems =
         f:
-        nixpkgs.lib.genAttrs systems (
+        lib.genAttrs systems (
           system:
           f (
             import nixpkgs {
               inherit system;
-              config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "coucou";
+              # Only for this package: building it for yourself is what its
+              # license allows.
+              config.allowUnfreePredicate = pkg: lib.getName pkg == "coucou";
             }
           )
         );
     in
     {
-      packages = forAllSystems (pkgs: rec {
+      packages = forAllSystems (pkgs: {
         coucou = pkgs.callPackage ./linux/nix/package.nix { };
-        default = coucou;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.coucou;
       });
 
-      apps = forAllSystems (pkgs: {
-        default = {
-          type = "app";
-          program = "${self.packages.${pkgs.system}.coucou}/bin/coucou";
-        };
-      });
+      overlays.default = final: prev: {
+        coucou = final.callPackage ./linux/nix/package.nix { };
+      };
 
-      # nix develop: what `npm run tauri dev` needs (windows/README.md).
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          inputsFrom = [ self.packages.${pkgs.system}.coucou ];
-          packages = [
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.rust-analyzer
-            pkgs.clippy
-            pkgs.nodejs
-          ];
-          shellHook = ''
-            export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules"
-            export LD_LIBRARY_PATH="${
-              pkgs.lib.makeLibraryPath [
-                pkgs.libayatana-appindicator
-                pkgs.gtk-layer-shell
-                pkgs.webkitgtk_4_1
-                pkgs.gtk3
-              ]
-            }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
-          '';
-        };
-      });
+      # The toolchain and libraries to work on the Linux app: `nix develop`, then
+      # `cd windows && npm ci && npm run tauri dev`.
+      devShells = forAllSystems (
+        pkgs:
+        let
+          coucou = self.packages.${pkgs.stdenv.hostPlatform.system}.coucou;
+        in
+        {
+          default = pkgs.mkShell {
+            inputsFrom = [ coucou ];
+            SHERPA_ONNX_LIB_DIR = "${coucou.sherpaOnnxStatic}/lib";
+          };
+        }
+      );
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt);
     };

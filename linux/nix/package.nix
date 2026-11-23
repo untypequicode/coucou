@@ -1,157 +1,218 @@
-# Coucou for NixOS and Nix — built from the Tauri app in windows/, which runs on
-# Windows and Linux alike. Use it through the flake at the root of the repo:
-#   nix run github:Louis-CFM/coucou
+# Maintainer: Dorian Luyet (@DurianTheWAV)
+#
+# Coucou for Linux: the Tauri 2 app in windows/ (Rust + TypeScript), built from source.
+# Exposed by the flake at the root of the repo (flake.nix); see "NixOS" in README.md.
+#
+# Nothing here needs touching for a release: the version is read from windows/Cargo.toml,
+# the crates from windows/Cargo.lock and the npm packages from windows/package-lock.json.
+# The only hashes are sherpa-onnx's below, which change when Cargo.lock moves to a new
+# sherpa-onnx-sys version.
 {
   lib,
   stdenv,
-  fetchurl,
+  fetchzip,
   rustPlatform,
-  fetchNpmDeps,
-  npmHooks,
-  nodejs,
+  cargo,
+  rustc,
   cargo-tauri,
+  importNpmLock,
+  nodejs,
   pkg-config,
   wrapGAppsHook3,
-  openssl,
+  alsa-lib,
+  bzip2,
   dbus,
-  alsa-lib, # Flow dictation and the Notetaker record through cpal
+  glib,
   glib-networking,
-  webkitgtk_4_1,
+  gst_all_1,
   gtk3,
   gtk-layer-shell,
   libayatana-appindicator,
   librsvg,
-  gst_all_1,
+  webkitgtk_4_1,
   xdg-utils,
+  xz,
+  zstd,
 }:
 
 let
-  root = ../..;
-  triple = stdenv.hostPlatform.rust.rustcTargetSpec;
-  cargoToml = lib.importTOML (root + "/windows/Cargo.toml");
+  sherpaOnnxSys =
+    lib.findFirst (p: p.name == "sherpa-onnx-sys")
+      (throw "coucou: sherpa-onnx-sys is missing from windows/Cargo.lock")
+      (lib.importTOML ../../windows/Cargo.lock).package;
+  sherpaOnnxVersion = sherpaOnnxSys.version;
 
-  # sherpa-onnx-sys (speech recognition for Flow and the Notetaker) downloads its
-  # static libraries while it builds, which the sandbox forbids: they are fetched
-  # here and handed over through SHERPA_ONNX_LIB_DIR. Keep the version equal to
-  # the sherpa-onnx-sys one in windows/Cargo.lock, and update both hashes with it.
-  sherpaVersion = "1.13.8";
-  sherpaArch = if stdenv.hostPlatform.isAarch64 then "aarch64" else "x64";
-  sherpaStem = "sherpa-onnx-v${sherpaVersion}-linux-${sherpaArch}-static-lib";
-  sherpaArchive = fetchurl {
-    url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVersion}/${sherpaStem}.tar.bz2";
-    hash =
-      if stdenv.hostPlatform.isAarch64 then
-        "sha256-d5g+PPKapg8uUx0knb0B0VWWUwVQyNsungL8amVdprs="
-      else
-        "sha256-4f3FtnUw4VdB74l/pf//KXBW878MbYKaJ6+SJaTEtaY=";
+  # sherpa-onnx-sys downloads its static libraries (sherpa-onnx + onnxruntime) from
+  # GitHub at build time, which the Nix sandbox forbids. Fetch the same archive here
+  # and hand it over with SHERPA_ONNX_LIB_DIR. After a sherpa-onnx-sys bump the URL
+  # follows Cargo.lock and the build stops on a hash mismatch: copy the new hashes in.
+  sherpaOnnxArchives = {
+    x86_64-linux = {
+      arch = "x64";
+      hash = "sha256-WLP1eIW3GIIVSDK4g4xi7AfF0Spg9z92cVLmLU6SXw4=";
+    };
+    aarch64-linux = {
+      arch = "aarch64";
+      hash = "sha256-Yez0bmpbNktkMqJpMInFOoHX1kAuwCY8cFl3JcKo4xE=";
+    };
   };
-in
-rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "coucou";
-  version = cargoToml.workspace.package.version;
 
-  # The sounds live in the macOS tree (windows/vite.config.ts), so the source is
-  # the repo, cut down to what this build reads.
+  sherpaOnnxArchive =
+    sherpaOnnxArchives.${stdenv.hostPlatform.system}
+      or (throw "coucou: no sherpa-onnx build for ${stdenv.hostPlatform.system}");
+
+  sherpaOnnxStatic = fetchzip {
+    url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaOnnxVersion}/sherpa-onnx-v${sherpaOnnxVersion}-linux-${sherpaOnnxArchive.arch}-static-lib.tar.bz2";
+    inherit (sherpaOnnxArchive) hash;
+  };
+
+  # The Tauri app without local build output, plus the sounds its Vite build copies
+  # from the Mac app. The rest of the repo (the Mac app, Android, docs…) does not
+  # trigger rebuilds.
   src = lib.fileset.toSource {
-    inherit root;
+    root = ../..;
     fileset = lib.fileset.unions [
-      (root + "/windows")
-      (root + "/NotchBuddy/Resources/sounds")
-      (root + "/linux/arch/coucou.desktop")
-      (root + "/LICENSE")
-      (root + "/LICENSE-ASSETS.md")
+      (lib.fileset.difference ../../windows (
+        lib.fileset.unions (
+          map lib.fileset.maybeMissing [
+            ../../windows/dist
+            ../../windows/node_modules
+            ../../windows/release
+            ../../windows/src-tauri/gen
+            ../../windows/target
+          ]
+        )
+      ))
+      ../../NotchBuddy/Resources/sounds
     ];
   };
+in
+stdenv.mkDerivation {
+  pname = "coucou";
+  version = (lib.importTOML ../../windows/Cargo.toml).workspace.package.version;
 
-  cargoRoot = "windows";
-  buildAndTestSubdir = finalAttrs.cargoRoot;
-  cargoLock.lockFile = root + "/windows/Cargo.lock";
+  inherit src;
+  sourceRoot = "${src.name}/windows";
 
-  npmRoot = "windows";
-  # Update the hash when windows/package-lock.json changes (Nix prints the new one).
-  npmDeps = fetchNpmDeps {
-    name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
-    src = "${finalAttrs.src}/windows";
-    hash = "sha256-iJ8hACfIJNHjRIeeoKXkcHUi0nEUuhmBxwr+u215ljw=";
+  # Both read straight from the lock files: no hash to update on each release.
+  cargoDeps = rustPlatform.importCargoLock { lockFile = ../../windows/Cargo.lock; };
+  npmDeps = importNpmLock {
+    package = lib.importJSON ../../windows/package.json;
+    packageLock = lib.importJSON ../../windows/package-lock.json;
   };
 
+  # cargo-tauri.hook runs `cargo tauri build --bundles deb` from here, and the deb's
+  # contents become $out. `npm run build` (Tauri's beforeBuildCommand) builds the
+  # front end and coucou-hook, which the bundle picks up from target/release.
+  buildAndTestSubdir = "src-tauri";
+
+  env.SHERPA_ONNX_LIB_DIR = "${sherpaOnnxStatic}/lib";
+
+  # nixpkgs builds with CARGO_BUILD_TARGET set, so npm's prebuild puts coucou-hook in
+  # target/<triple>/release, while tauri.linux.conf.json expects target/release.
+  preBuild = ''
+    mkdir -p target/release
+    ln -s ../${stdenv.hostPlatform.rust.cargoShortTarget}/release/coucou-hook target/release/coucou-hook
+  '';
+
+  postPatch = ''
+    # The tray icon loads libayatana-appindicator with dlopen: give it the full path.
+    substituteInPlace "$cargoDepsCopy"/libappindicator-sys-*/src/lib.rs \
+      --replace-fail "libayatana-appindicator3.so.1" \
+        "${libayatana-appindicator}/lib/libayatana-appindicator3.so.1"
+
+    # "Start at login" (~/.config/autostart/Coucou.desktop) and the command Settings
+    # shows for desktop shortcuts would record this build's own executable,
+    # /nix/store/…/bin/.coucou-wrapped: it skips the wrapper (GTK, GStreamer and TLS
+    # modules) and is gone after the next garbage collection. Use `coucou` from PATH.
+    substituteInPlace "$cargoDepsCopy"/tauri-plugin-autostart-*/src/lib.rs \
+      --replace-fail "let current_exe = current_exe()?;" \
+        'let current_exe = std::path::PathBuf::from("coucou");'
+    substituteInPlace src-tauri/src/shortcuts.rs \
+      --replace-fail ".or_else(|| std::env::current_exe().ok())" ""
+  '';
+
   nativeBuildInputs = [
+    cargo
     cargo-tauri.hook
+    importNpmLock.npmConfigHook
     nodejs
-    npmHooks.npmConfigHook
     pkg-config
+    rustc
+    rustPlatform.cargoSetupHook
     wrapGAppsHook3
   ];
 
   buildInputs = [
-    openssl
+    alsa-lib
+    bzip2
     dbus
-    alsa-lib # Flow dictation and the Notetaker record through cpal
-    glib-networking # TLS for WebKit
-    webkitgtk_4_1
+    glib-networking
+    gst_all_1.gst-plugins-base # Mochi's sounds, played by WebKit
+    gst_all_1.gst-plugins-good
+    gtk-layer-shell
     gtk3
-    gtk-layer-shell # the island sits on the top edge on Hyprland, Sway, KDE, COSMIC
     libayatana-appindicator
     librsvg
-    # Mochi's sounds are WAV files: wavparse is in -good.
-    gst_all_1.gstreamer
-    gst_all_1.gst-plugins-base
-    gst_all_1.gst-plugins-good
+    webkitgtk_4_1
+    xz
+    zstd
   ];
 
-  # The packages are not wanted here, only the binary.
-  tauriBuildFlags = [ "--no-bundle" ];
-
-  # npm's prebuild script builds coucou-hook for the target triple, but
-  # tauri.conf.json looks for it in windows/target/release.
-  postPatch = ''
-    mkdir -p "$TMPDIR/sherpa"
-    tar -xjf ${sherpaArchive} -C "$TMPDIR/sherpa"
-    export SHERPA_ONNX_LIB_DIR="$TMPDIR/sherpa/${sherpaStem}/lib"
-    mkdir -p target/${triple}/release windows/target
-    ln -s "$PWD/target/${triple}/release" windows/target/release
+  postInstall = ''
+    # Tauri files its 128x128@2x icon (256 px) under 256x256@2, which means 512 px.
+    if [ -d $out/share/icons/hicolor/256x256@2 ]; then
+      mv $out/share/icons/hicolor/256x256@2 $out/share/icons/hicolor/256x256
+    fi
   '';
 
-  # The tests of the whole workspace run in the Linux workflow.
-  doCheck = false;
-
-  # The app copies coucou-hook from next to its own executable into
-  # ~/.local/share/coucou/bin, where the agents' configs point.
-  installPhase = ''
-    runHook preInstall
-    install -Dm755 target/${triple}/release/coucou $out/bin/coucou
-    install -Dm755 target/${triple}/release/coucou-hook $out/bin/coucou-hook
-    install -Dm644 linux/arch/coucou.desktop $out/share/applications/coucou.desktop
-    install -Dm644 windows/src-tauri/icons/32x32.png $out/share/icons/hicolor/32x32/apps/coucou.png
-    install -Dm644 windows/src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/coucou.png
-    install -Dm644 windows/src-tauri/icons/128x128@2x.png $out/share/icons/hicolor/256x256/apps/coucou.png
-    runHook postInstall
-  '';
-
-  # The tray icon library opens libayatana-appindicator at run time; xdg-open
-  # opens links and folders.
   preFixup = ''
     gappsWrapperArgs+=(
-      --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libayatana-appindicator ]}
-      --prefix PATH : ${lib.makeBinPath [ xdg-utils ]}
+      # xdg-open (links, files), gsettings (theme), gtk-launch (« OK Coucou » opens apps).
+      --suffix PATH : ${
+        lib.makeBinPath [
+          glib
+          gtk3
+          xdg-utils
+        ]
+      }
     )
   '';
 
+  # For the flake's dev shell.
+  passthru = { inherit sherpaOnnxStatic; };
+
+  # Coucou copies the relay from $out/lib/Coucou/coucou-hook to
+  # ~/.local/share/coucou/bin/ at each launch, so Claude Code's hooks keep a stable
+  # path across updates rather than pointing into the Nix store.
+
   meta = {
-    description = "Mochi lives at the top of your screen and keeps an eye on your Claude Code sessions";
+    description = "Mochi lives at the top of your screen and keeps an eye on your AI coding agents";
+    longDescription = ''
+      Coucou shows your Claude Code, Codex, Cursor, Gemini CLI and other agent sessions
+      at the top of the screen, and lets you approve, answer, chat and drop files without
+      leaving what you are doing. Also: Flow dictation with Parakeet offline, and a
+      notetaker for your calls.
+    '';
     homepage = "https://github.com/Louis-CFM/coucou";
-    license = [
-      lib.licenses.mit
+    changelog = "https://github.com/Louis-CFM/coucou/blob/main/CHANGELOG.md";
+    # The code is MIT. The name, Mochi, the icon and the sounds are © Louis Raillé
+    # (LICENSE-ASSETS.md): building and running it for yourself is allowed,
+    # redistributing binaries is not without written permission. Hence `unfree`,
+    # which also keeps it out of public binary caches.
+    license = with lib.licenses; [
+      mit
+      unfree
+    ];
+    # Same fields as nixpkgs' maintainers/maintainer-list.nix.
+    maintainers = [
       {
-        shortName = "coucou-assets";
-        fullName = "Coucou assets license (LICENSE-ASSETS.md)";
-        free = false;
+        name = "Dorian Luyet";
+        github = "DurianTheWAV";
+        githubId = 151391647;
       }
     ];
-    platforms = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
     mainProgram = "coucou";
+    platforms = lib.attrNames sherpaOnnxArchives;
   };
-})
+}

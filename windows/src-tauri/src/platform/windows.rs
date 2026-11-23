@@ -8,12 +8,19 @@ use std::process::Command;
 
 use tauri::{AppHandle, Manager, WebviewWindow};
 
-use ::windows::core::{w, BOOL, PWSTR};
+use ::windows::core::{w, BOOL, HSTRING, PCWSTR, PWSTR};
 use ::windows::Win32::Foundation::{
     CloseHandle, HANDLE, HLOCAL, HWND, LPARAM, LocalFree, POINT, RPC_E_CHANGED_MODE,
 };
-use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
-use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+use ::windows::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+    SetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT,
+};
+use ::windows::Win32::Security::{
+    GetSecurityDescriptorDacl, GetTokenInformation, TokenUser, ACL, DACL_SECURITY_INFORMATION,
+    PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
+    TOKEN_USER,
+};
 use ::windows::Win32::System::Com::{
     CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
 };
@@ -22,9 +29,11 @@ use ::windows::Win32::System::Diagnostics::ToolHelp::{
 };
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
+use ::windows::Win32::System::Registry::{RegGetValueW, HKEY_CLASSES_ROOT, RRF_RT_REG_SZ};
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
 use ::windows::Win32::System::Threading::{
-    AttachThreadInput, GetCurrentProcess, GetCurrentThreadId, OpenProcessToken,
+    AttachThreadInput, GetCurrentProcess, GetCurrentThreadId, OpenProcess, OpenProcessToken,
+    PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, HKL, MAPVK_VK_TO_VSC,
@@ -37,7 +46,8 @@ use ::windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos,
     GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId,
     IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, SetWindowLongPtrW, ShowWindow,
-    GWL_EXSTYLE, GW_OWNER, SW_RESTORE, SW_SHOW, SW_SHOWNORMAL, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    GWL_EXSTYLE, GW_OWNER, SW_RESTORE, SW_SHOW, SW_SHOWNORMAL, WS_EX_APPWINDOW, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW,
 };
 
 use super::LocalTime;
@@ -90,9 +100,55 @@ pub fn picture_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// %APPDATA% and %LOCALAPPDATA% are already private to the user.
+/// Creates `dir` and restricts its DACL (no inheritance) to LocalSystem,
+/// Administrators, and the current user SID so shared directories cannot be swapped.
 pub fn ensure_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)
+    std::fs::create_dir_all(dir)?;
+    let Some(sid) = current_user_sid() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "cannot resolve current user SID",
+        ));
+    };
+    let sddl = HSTRING::from(format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{sid})"));
+    let path_wide = HSTRING::from(dir.as_os_str());
+    unsafe {
+        let mut sd = PSECURITY_DESCRIPTOR::default();
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            PCWSTR(sddl.as_ptr()),
+            SDDL_REVISION_1,
+            &mut sd,
+            None,
+        )
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
+
+        let mut present = BOOL(0);
+        let mut dacl: *mut ACL = std::ptr::null_mut();
+        let mut defaulted = BOOL(0);
+        let res = GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted);
+        let win_err = if res.is_ok() && present.as_bool() && !dacl.is_null() {
+            SetNamedSecurityInfoW(
+                PCWSTR(path_wide.as_ptr()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                Some(dacl),
+                None,
+            )
+        } else {
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "security descriptor has no DACL",
+            ));
+        };
+        let _ = LocalFree(Some(HLOCAL(sd.0)));
+        if win_err.0 != 0 {
+            return Err(std::io::Error::from_raw_os_error(win_err.0 as i32));
+        }
+    }
+    Ok(())
 }
 
 /// Nothing to set up before the webview starts.
@@ -120,6 +176,18 @@ pub fn no_console(cmd: &mut Command) -> &mut Command {
 pub fn open_url(url: &str) {
     let _ = no_console(Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]))
         .spawn();
+}
+
+/// Whether an app on this computer registered the URL scheme (`whatsapp`…), so
+/// `open_url` on one of its links reaches that app instead of a "pick an app"
+/// prompt. Every registered scheme carries an empty "URL Protocol" value; a
+/// Microsoft Store app's is written there too, for as long as it is installed.
+pub fn handles_scheme(scheme: &str) -> bool {
+    let key = HSTRING::from(scheme);
+    unsafe {
+        RegGetValueW(HKEY_CLASSES_ROOT, PCWSTR(key.as_ptr()), w!("URL Protocol"), RRF_RT_REG_SZ, None, None, None)
+    }
+    .is_ok()
 }
 
 pub fn reveal_folder(path: &str) {
@@ -174,38 +242,40 @@ pub fn cli_candidates(name: &str) -> Vec<PathBuf> {
 
 /// The SID of the account this process runs as, as `S-1-5-21-…`.
 pub fn current_user_sid() -> Option<String> {
-    unsafe {
-        let mut token = HANDLE::default();
-        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).ok()?;
+    unsafe { process_user_sid(GetCurrentProcess()) }
+}
 
-        // First call sizes the buffer, second fills it.
-        let mut needed = 0u32;
-        let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
-        if needed == 0 {
-            let _ = CloseHandle(token);
-            return None;
-        }
-        let mut buf = vec![0u8; needed as usize];
-        let ok = GetTokenInformation(
-            token,
-            TokenUser,
-            Some(buf.as_mut_ptr().cast()),
-            needed,
-            &mut needed,
-        )
-        .is_ok();
+unsafe fn process_user_sid(process: HANDLE) -> Option<String> {
+    let mut token = HANDLE::default();
+    OpenProcessToken(process, TOKEN_QUERY, &mut token).ok()?;
+
+    // First call sizes the buffer, second fills it.
+    let mut needed = 0u32;
+    let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
+    if needed == 0 {
         let _ = CloseHandle(token);
-        if !ok {
-            return None;
-        }
-
-        let user = &*(buf.as_ptr() as *const TOKEN_USER);
-        let mut text = PWSTR::null();
-        ConvertSidToStringSidW(user.User.Sid, &mut text).ok()?;
-        let sid = text.to_string().ok();
-        let _ = LocalFree(Some(HLOCAL(text.0 as *mut _)));
-        sid
+        return None;
     }
+    let mut buf = vec![0u8; needed as usize];
+    let ok = GetTokenInformation(
+        token,
+        TokenUser,
+        Some(buf.as_mut_ptr().cast()),
+        needed,
+        &mut needed,
+    )
+    .is_ok();
+    let _ = CloseHandle(token);
+    if !ok {
+        return None;
+    }
+
+    let user = &*(buf.as_ptr() as *const TOKEN_USER);
+    let mut text = PWSTR::null();
+    ConvertSidToStringSidW(user.User.Sid, &mut text).ok()?;
+    let sid = text.to_string().ok();
+    let _ = LocalFree(Some(HLOCAL(text.0 as *mut _)));
+    sid
 }
 
 // The display name only feeds Mochi's greeting (identity.rs). The calls are
@@ -333,7 +403,7 @@ pub fn make_non_activating(win: &WebviewWindow) {
     let Some(hwnd) = hwnd_of(win) else { return };
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        let want = ex | WS_EX_NOACTIVATE.0 as isize | WS_EX_TOOLWINDOW.0 as isize;
+        let want = overlay_bits(ex | WS_EX_NOACTIVATE.0 as isize);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
     }
 }
@@ -343,13 +413,38 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
     let Some(hwnd) = hwnd_of(win) else { return };
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        let want = if activating {
+        let want = overlay_bits(if activating {
             ex & !(WS_EX_NOACTIVATE.0 as isize)
         } else {
             ex | WS_EX_NOACTIVATE.0 as isize
-        };
+        });
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
     }
+}
+
+/// An overlay, not an app: a tool window without WS_EX_APPWINDOW, so no taskbar
+/// (Windows' own, or a replacement like Bloom) and no Alt+Tab lists it.
+fn overlay_bits(ex: isize) -> isize {
+    (ex | WS_EX_TOOLWINDOW.0 as isize) & !(WS_EX_APPWINDOW.0 as isize)
+}
+
+/// Click-through on or off. The windowing layer rebuilds the extended style
+/// from its own flags when it does this, dropping the overlay bits, so they are
+/// put back right after, queued on the UI thread behind that change (the cursor
+/// polls call this from their own threads).
+pub fn set_click_through(win: &WebviewWindow, ignore: bool) {
+    let _ = win.set_ignore_cursor_events(ignore);
+    let w = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        let Some(hwnd) = hwnd_of(&w) else { return };
+        unsafe {
+            let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            let want = overlay_bits(ex);
+            if want != ex {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
+            }
+        }
+    });
 }
 
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.
@@ -371,6 +466,57 @@ pub fn pipe_client_pid(handle: RawHandle) -> Option<u32> {
     let mut pid = 0u32;
     unsafe { GetNamedPipeClientProcessId(HANDLE(handle), &mut pid).ok()? };
     (pid != 0).then_some(pid)
+}
+
+/// True when the named pipe client belongs to the same user SID as this process.
+pub fn pipe_client_is_same_user(handle: RawHandle) -> bool {
+    let Some(mine) = current_user_sid() else { return false };
+    let Some(pid) = pipe_client_pid(handle) else { return false };
+    unsafe {
+        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return false;
+        };
+        let theirs = process_user_sid(process);
+        let _ = CloseHandle(process);
+        theirs.as_deref() == Some(mine.as_str())
+    }
+}
+
+/// Creates a named pipe instance with an explicit owner-restricted DACL
+/// (`SYSTEM`, `Administrators`, and the current user SID — no `Everyone`).
+pub fn create_private_pipe(
+    name: &str,
+    first_instance: bool,
+) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeServer> {
+    let Some(sid) = current_user_sid() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "cannot resolve current user SID",
+        ));
+    };
+    let sddl = HSTRING::from(format!("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;{sid})"));
+    let mut sd = PSECURITY_DESCRIPTOR::default();
+    unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            PCWSTR(sddl.as_ptr()),
+            SDDL_REVISION_1,
+            &mut sd,
+            None,
+        )
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
+    }
+    let mut sa = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: sd.0,
+        bInheritHandle: BOOL(0),
+    };
+    let mut opts = tokio::net::windows::named_pipe::ServerOptions::new();
+    opts.first_pipe_instance(first_instance);
+    let res = unsafe { opts.create_with_security_attributes_raw(name, (&raw mut sa).cast()) };
+    unsafe {
+        let _ = LocalFree(Some(HLOCAL(sd.0)));
+    }
+    res
 }
 
 /// Whether a program runs (by its executable's name, any case): the Mail pill asks for
@@ -578,6 +724,70 @@ fn activate_claude_protocol() -> bool {
     }
 }
 
+// ── New Claude Code session (launch.rs) ───────────────────────────────────────
+
+/// Windows Terminal's `wt.exe`, when it is installed: on %PATH%, or as the
+/// app execution alias the Store package puts in WindowsApps (a reparse point,
+/// so it is looked at without being followed).
+pub fn windows_terminal() -> Option<PathBuf> {
+    find_on_path("wt").or_else(|| {
+        let alias = PathBuf::from(std::env::var_os("LOCALAPPDATA")?)
+            .join("Microsoft")
+            .join("WindowsApps")
+            .join("wt.exe");
+        std::fs::symlink_metadata(&alias).is_ok().then_some(alias)
+    })
+}
+
+/// "Choose a folder…": the system's folder picker (IFileOpenDialog with
+/// FOS_PICKFOLDERS), over the island, `start` open in it. Runs on a thread of
+/// its own, in a single-threaded apartment as the Shell's dialogs want.
+pub fn pick_folder(app: &AppHandle, start: Option<&str>, title: &str) -> Option<String> {
+    use ::windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
+    use ::windows::Win32::UI::Shell::{
+        FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName, FOS_FORCEFILESYSTEM,
+        FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
+    };
+
+    let owner = app
+        .get_webview_window(crate::island::WINDOW_LABEL)
+        .and_then(|w| hwnd_of(&w))
+        .map(|h| h.0 as isize);
+    let start = start.map(HSTRING::from);
+    let title = HSTRING::from(title);
+    std::thread::spawn(move || unsafe {
+        let initialized = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
+            return None;
+        }
+        let picked = (|| -> Option<String> {
+            let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+            let options = dialog.GetOptions().ok()?;
+            dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM).ok()?;
+            let _ = dialog.SetTitle(&title);
+            if let Some(start) = &start {
+                if let Ok(folder) = SHCreateItemFromParsingName::<_, _, IShellItem>(start, None) {
+                    let _ = dialog.SetFolder(&folder);
+                }
+            }
+            // Cancelled: an error, and nothing picked.
+            dialog.Show(owner.map(|raw| HWND(raw as *mut _))).ok()?;
+            let item = dialog.GetResult().ok()?;
+            let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+            let path = name.to_string().ok();
+            CoTaskMemFree(Some(name.0 as *const _));
+            path
+        })();
+        if initialized.is_ok() {
+            CoUninitialize();
+        }
+        picked
+    })
+    .join()
+    .ok()
+    .flatten()
+}
+
 #[cfg(test)]
 mod claude_launch_tests {
     use super::open_claude_with;
@@ -694,3 +904,54 @@ pub fn prepare_pill_window(win: &WebviewWindow, _mode: super::DesktopMode) -> bo
 pub fn set_pill_edge(_win: &WebviewWindow, _edge: &str) {}
 
 pub fn set_pill_input(_win: &WebviewWindow, _rects: Vec<(f64, f64, f64, f64)>) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_private_dir_applies_protected_owner_dacl() {
+        use ::windows::Win32::Security::Authorization::GetNamedSecurityInfoW;
+        use ::windows::Win32::Security::{GetSecurityDescriptorControl, SE_DACL_PROTECTED};
+
+        let dir = std::env::temp_dir().join(format!("coucou-acl-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        ensure_private_dir(&dir).unwrap();
+
+        let path_wide = HSTRING::from(dir.as_os_str());
+        let mut sd = PSECURITY_DESCRIPTOR::default();
+        let err = unsafe {
+            GetNamedSecurityInfoW(
+                PCWSTR(path_wide.as_ptr()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                None,
+                None,
+                &mut sd,
+            )
+        };
+        assert_eq!(err.0, 0);
+        let mut ctrl = 0u16;
+        let mut rev = 0u32;
+        unsafe {
+            GetSecurityDescriptorControl(sd, &mut ctrl, &mut rev).unwrap();
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+        }
+        assert_ne!(ctrl & SE_DACL_PROTECTED.0, 0, "DACL inheritance should be disabled");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn private_pipe_authenticates_same_user_client() {
+        use std::os::windows::io::AsRawHandle;
+
+        let name = format!(r"\\.\pipe\coucou-sec-test-{}", std::process::id());
+        let server = create_private_pipe(&name, true).unwrap();
+        let client = std::fs::OpenOptions::new().read(true).write(true).open(&name).unwrap();
+        assert!(pipe_client_is_same_user(server.as_raw_handle()));
+        drop(client);
+        drop(server);
+    }
+}
